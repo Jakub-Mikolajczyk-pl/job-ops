@@ -2,6 +2,7 @@ import type { Job, JobBrief } from "@shared/types.js";
 import { Sparkles } from "lucide-react";
 import type React from "react";
 import { cn } from "@/lib/utils";
+import { ReadablePill } from "./ReadablePill";
 
 type JobBriefPaneProps = {
   job: Job;
@@ -51,12 +52,7 @@ export const JobBriefPane: React.FC<JobBriefPaneProps> = ({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {brief.specifics.map((item) => (
-                <span
-                  key={item}
-                  className="whitespace-nowrap inline-flex items-center text-foreground bg-muted/50 rounded-lg px-2 py-1"
-                >
-                  <span className="truncate">{item}</span>
-                </span>
+                <ReadablePill key={item}>{item}</ReadablePill>
               ))}
             </div>
           </div>

@@ -3,6 +3,7 @@ import {
   JobBriefPane,
   JobDescriptionPanel,
   JobHeader,
+  ReadablePill,
 } from "@client/components";
 import { GhostwriterDrawer } from "@client/components/ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "@client/components/JobDetailsEditDrawer";
@@ -10,6 +11,7 @@ import { KbdHint } from "@client/components/KbdHint";
 import { OpenJobListingButton } from "@client/components/OpenJobListingButton";
 import { TooltipWhenDisabled } from "@client/components/TooltipWhenDisabled";
 import { TailoringWorkspace } from "@client/components/tailoring/TailoringWorkspace";
+import { parseTailoredSkills } from "@client/components/tailoring-utils";
 import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
@@ -74,6 +76,7 @@ import { trackProductEvent } from "@/lib/analytics";
 import {
   cn,
   copyTextToClipboard,
+  formatDate,
   formatJobForWebhook,
   safeFilenamePart,
 } from "@/lib/utils";
@@ -212,32 +215,44 @@ const Stat: React.FC<{
   );
 };
 
-const KitStatus: React.FC<{
+const ApplicationKitReviewItem: React.FC<{
   icon: React.ReactNode;
-  label: string;
-  ready: boolean;
-  readyLabel?: string;
-  optional?: boolean;
-}> = ({ icon, label, ready, readyLabel = "Ready", optional = false }) => (
-  <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border/30 px-3 py-2.5 last:border-b-0">
-    <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-      <span className="text-muted-foreground/85">{icon}</span>
-      <span className="truncate">{label}</span>
-    </span>
-    <span
-      className={cn(
-        "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
-        ready
-          ? "bg-emerald-500/10 text-emerald-300"
-          : optional
-            ? "bg-sky-500/10 text-sky-300"
-            : "bg-amber-500/10 text-amber-300",
-      )}
-    >
-      {ready ? readyLabel : optional ? "Optional" : "Missing"}
-    </span>
-  </div>
-);
+  title: string;
+  status: "ready" | "review" | "optional";
+  statusLabel: string;
+  children: React.ReactNode;
+}> = ({ icon, title, status, statusLabel, children }) => {
+  const statusClassName =
+    status === "ready"
+      ? "bg-emerald-500/10 text-emerald-300"
+      : status === "review"
+        ? "bg-amber-500/10 text-amber-300"
+        : "bg-sky-500/10 text-sky-300";
+
+  return (
+    <div className="space-y-2 border-b border-border/35 px-3 py-3 last:border-b-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-muted-foreground/80">{icon}</span>
+          <div className="truncate text-sm font-medium text-foreground/85">
+            {title}
+          </div>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+            statusClassName,
+          )}
+        >
+          {statusLabel}
+        </span>
+      </div>
+      <div className="pl-6 text-sm leading-6 text-muted-foreground">
+        {children}
+      </div>
+    </div>
+  );
+};
 
 export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   activeTab,
@@ -281,8 +296,23 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         .filter(Boolean),
     [catalog, selectedProjectIds],
   );
+  const tailoredSkillGroups = useMemo(
+    () => parseTailoredSkills(selectedJob?.tailoredSkills),
+    [selectedJob?.tailoredSkills],
+  );
+  const tailoredSkillKeywords = useMemo(
+    () =>
+      tailoredSkillGroups
+        .flatMap((group) =>
+          group.keywords.length > 0 ? group.keywords : [group.name],
+        )
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 8),
+    [tailoredSkillGroups],
+  );
   const hasTailoredSummary = Boolean(selectedJob?.tailoredSummary);
-  const hasTailoredSkills = Boolean(selectedJob?.tailoredSkills);
+  const hasTailoredSkills = tailoredSkillGroups.length > 0;
   const hasResumePdf = Boolean(selectedJob?.pdfPath);
   const hasJobListing = Boolean(jobLink && jobLink !== "#");
   const hasOpenedJobListing = selectedJob
@@ -532,6 +562,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const pdfRegeneratingReason = isRegeneratingPdf
     ? PDF_REGENERATING_MESSAGE
     : null;
+  const pdfGeneratedLabel = formatDate(selectedJob.pdfGeneratedAt);
   const pdfActionDisabled = !selectedJob.pdfPath || isRegeneratingPdf;
   const tone = statusTone[selectedJob.status];
   const openListingIsPrimary =
@@ -841,57 +872,89 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 Application kit
               </div>
               <div className="overflow-hidden rounded-md border border-border/45 bg-muted/5">
-                <KitStatus
+                <ApplicationKitReviewItem
                   icon={<FileText className="h-4 w-4" />}
-                  label="Tailored summary"
-                  ready={hasTailoredSummary}
-                />
-                <KitStatus
-                  icon={<Star className="h-4 w-4" />}
-                  label="Tailored skills"
-                  ready={hasTailoredSkills}
-                />
-                <KitStatus
-                  icon={<FileText className="h-4 w-4" />}
-                  label="Resume PDF"
-                  ready={hasResumePdf}
-                />
-                <KitStatus
-                  icon={<FolderKanban className="h-4 w-4" />}
-                  label="Selected projects"
-                  ready={selectedProjectIds.length > 0}
-                  readyLabel={`${selectedProjectIds.length} included`}
-                />
-                <KitStatus
-                  icon={<Link2 className="h-4 w-4" />}
-                  label="Supporting links"
-                  ready={false}
-                  optional
-                />
-              </div>
-            </div>
+                  title="Resume summary"
+                  status={hasTailoredSummary ? "ready" : "review"}
+                  statusLabel={hasTailoredSummary ? "Ready" : "Missing"}
+                >
+                  {hasTailoredSummary
+                    ? selectedJob.tailoredSummary
+                    : "No tailored summary has been saved for this role."}
+                </ApplicationKitReviewItem>
 
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-normal text-foreground/90">
-                Selected projects
+                <ApplicationKitReviewItem
+                  icon={<Star className="h-4 w-4" />}
+                  title="Skills emphasis"
+                  status={hasTailoredSkills ? "ready" : "review"}
+                  statusLabel={
+                    hasTailoredSkills
+                      ? `${tailoredSkillKeywords.length} terms`
+                      : "Missing"
+                  }
+                >
+                  {hasTailoredSkills ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tailoredSkillKeywords.map((keyword) => (
+                        <ReadablePill key={keyword}>{keyword}</ReadablePill>
+                      ))}
+                    </div>
+                  ) : (
+                    "No tailored skills have been saved for this role."
+                  )}
+                </ApplicationKitReviewItem>
+
+                <ApplicationKitReviewItem
+                  icon={<FolderKanban className="h-4 w-4" />}
+                  title="Evidence selected"
+                  status={selectedProjects.length > 0 ? "ready" : "review"}
+                  statusLabel={
+                    selectedProjects.length > 0
+                      ? `${selectedProjects.length} projects`
+                      : "None"
+                  }
+                >
+                  {selectedProjects.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedProjects.map((project) => (
+                        <ReadablePill key={project}>{project}</ReadablePill>
+                      ))}
+                    </div>
+                  ) : (
+                    "No projects selected yet. Use Tailoring to choose the evidence for this role."
+                  )}
+                </ApplicationKitReviewItem>
+
+                <ApplicationKitReviewItem
+                  icon={<FileText className="h-4 w-4" />}
+                  title="Resume PDF"
+                  status={hasResumePdf && !isStalePdf ? "ready" : "review"}
+                  statusLabel={
+                    isRegeneratingPdf
+                      ? "Generating"
+                      : isStalePdf
+                        ? "Outdated"
+                        : hasResumePdf
+                          ? "Ready"
+                          : "Missing"
+                  }
+                >
+                  {hasResumePdf
+                    ? `${selectedJob.pdfSource === "uploaded" ? "Uploaded" : "Generated"} PDF${pdfGeneratedLabel ? ` on ${pdfGeneratedLabel}` : ""}.`
+                    : "No PDF is attached for this job yet."}
+                </ApplicationKitReviewItem>
+
+                <ApplicationKitReviewItem
+                  icon={<Link2 className="h-4 w-4" />}
+                  title="Resume link tracking"
+                  status={selectedJob.tracerLinksEnabled ? "ready" : "optional"}
+                  statusLabel={selectedJob.tracerLinksEnabled ? "On" : "Off"}
+                >
+                  {selectedJob.tracerLinksEnabled
+                    ? "Outbound resume links will use tracer links the next time the PDF is generated."
+                    : "Tracer links are off for this job."}
+                </ApplicationKitReviewItem>
               </div>
-              {selectedProjects.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {selectedProjects.map((project) => (
-                    <span
-                      key={project}
-                      className="rounded-md border border-border/35 bg-background/40 px-3 py-1.5 text-xs text-muted-foreground"
-                    >
-                      {project}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground/70">
-                  No projects selected yet. Use Tailoring to choose the evidence
-                  for this role.
-                </p>
-              )}
             </div>
           </div>
         </TabsContent>

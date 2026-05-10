@@ -249,6 +249,66 @@ describe("JobDetailPanel", () => {
     expect(markApplied).toHaveClass("bg-emerald-600");
   });
 
+  it("shows reviewable application kit details for ready jobs", async () => {
+    vi.mocked(api.getResumeProjectsCatalog).mockResolvedValue([
+      {
+        id: "project-a",
+        name: "Marine Services Platform",
+        description: "",
+        date: "",
+        isVisibleInBase: true,
+      },
+      {
+        id: "project-b",
+        name: "Urdu Learning App",
+        description: "",
+        date: "",
+        isVisibleInBase: true,
+      },
+    ]);
+    const job = createJob({
+      status: "ready",
+      tailoredSummary:
+        "Software engineer focused on TypeScript services, React interfaces, and reliable delivery. Brings production experience across accessible UI, API integrations, automated testing, and operational debugging for teams that need careful execution from discovery through release.",
+      tailoredSkills: JSON.stringify([
+        { name: "Frontend", keywords: ["React", "TypeScript"] },
+        { name: "Backend", keywords: ["Node.js", "APIs"] },
+      ]),
+      selectedProjectIds: "project-a,project-b",
+      pdfPath: "data/pdfs/job-1.pdf",
+      pdfSource: "generated",
+      pdfFreshness: "current",
+      pdfGeneratedAt: "2025-02-03T10:30:00Z",
+      tracerLinksEnabled: true,
+    });
+
+    await renderJobDetailPanel({
+      activeTab: "ready",
+      activeJobs: [job],
+      selectedJob: job,
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const applyPanel = within(getApplyPanel());
+
+    expect(
+      applyPanel.getByText(/careful execution from discovery through release/i),
+    ).toBeInTheDocument();
+    expect(applyPanel.getByText("React")).toBeInTheDocument();
+    expect(applyPanel.getByText("Node.js")).toBeInTheDocument();
+    expect(
+      await applyPanel.findByText("Marine Services Platform"),
+    ).toBeInTheDocument();
+    expect(applyPanel.getByText("Urdu Learning App")).toBeInTheDocument();
+    expect(
+      applyPanel.getByText(/Generated PDF on 3 Feb 2025/i),
+    ).toBeInTheDocument();
+    expect(
+      applyPanel.getByText(/Outbound resume links will use tracer links/i),
+    ).toBeInTheDocument();
+  });
+
   it("disables application-kit PDF actions while regeneration is active", async () => {
     const job = createJob({
       status: "ready",
