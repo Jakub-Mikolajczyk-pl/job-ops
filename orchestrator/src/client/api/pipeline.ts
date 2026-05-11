@@ -89,3 +89,17 @@ export async function cancelPipeline(): Promise<{
     method: "POST",
   });
 }
+
+export interface SourceHealthRow {
+  source: string;
+  lastSuccessfulRun: string | null;
+  runsLast30d: number;
+  avgJobsPerRun: number;
+  errorRateLast30d: number;
+  lastError: string | null;
+  status: "ok" | "warn" | "error";
+}
+
+export async function getPipelineHealth(): Promise<SourceHealthRow[]> {
+  return fetchApi<SourceHealthRow[]>("/pipeline/health");
+}

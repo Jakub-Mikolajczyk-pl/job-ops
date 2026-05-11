@@ -18,6 +18,12 @@ function getSuitabilityScoreTone(score: number): string {
   return "text-muted-foreground/60";
 }
 
+function getOeColor(score: number): string {
+  if (score >= 70) return "text-emerald-400/80";
+  if (score >= 45) return "text-amber-400/80";
+  return "text-rose-400/80";
+}
+
 export const JobRowContent = ({
   job,
   isSelected = false,
@@ -81,11 +87,32 @@ export const JobRowContent = ({
         )}
       </div>
 
-      {hasScore && (
-        <div className="shrink-0 text-right">
-          <span className={cn("text-xs tabular-nums", suitabilityTone)}>
-            {job.suitabilityScore}
-          </span>
+      {(hasScore || job.oeFitnessScore != null || job.weeklyHoursEstimate != null) && (
+        <div className="shrink-0 text-right space-y-0.5">
+          {hasScore && (
+            <span className={cn("block text-xs tabular-nums", suitabilityTone)}>
+              {job.suitabilityScore}
+            </span>
+          )}
+          {job.oeFitnessScore != null && (
+            <span
+              className={cn(
+                "block text-[10px] tabular-nums",
+                getOeColor(job.oeFitnessScore),
+              )}
+              title={`OE-fitness: ${job.oeFitnessScore}/100`}
+            >
+              OE{job.oeFitnessScore}
+            </span>
+          )}
+          {job.weeklyHoursEstimate != null && (
+            <span
+              className="block text-[10px] tabular-nums text-muted-foreground"
+              title={`Estimated ~${job.weeklyHoursEstimate}h/wk commitment`}
+            >
+              ~{job.weeklyHoursEstimate}h/wk
+            </span>
+          )}
         </div>
       )}
     </div>

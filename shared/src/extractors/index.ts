@@ -14,6 +14,11 @@ export const EXTRACTOR_SOURCE_IDS = [
   "jobindex",
   "seek",
   "naukri",
+  "nofluffjobs",
+  "justjoinit",
+  "bulldogjob",
+  "pracujpl",
+  "theprotocol",
   "manual",
 ] as const;
 
@@ -25,6 +30,7 @@ export interface ExtractorSourceMetadata {
   category: "pipeline" | "manual";
   requiresCredentials?: boolean;
   ukOnly?: boolean;
+  requiresInteractiveChallenge?: boolean;
 }
 
 export const EXTRACTOR_SOURCE_METADATA: Record<
@@ -36,6 +42,7 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     order: 10,
     category: "pipeline",
     ukOnly: true,
+    requiresInteractiveChallenge: true,
   },
   indeed: { label: "Indeed", order: 20, category: "pipeline" },
   linkedin: { label: "LinkedIn", order: 30, category: "pipeline" },
@@ -46,6 +53,7 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     category: "pipeline",
     requiresCredentials: true,
     ukOnly: true,
+    requiresInteractiveChallenge: true,
   },
   adzuna: {
     label: "Adzuna",
@@ -53,7 +61,7 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     category: "pipeline",
     requiresCredentials: true,
   },
-  hiringcafe: { label: "Hiring Cafe", order: 70, category: "pipeline" },
+  hiringcafe: { label: "Hiring Cafe", order: 70, category: "pipeline", requiresInteractiveChallenge: true },
   startupjobs: { label: "startup.jobs", order: 80, category: "pipeline" },
   workingnomads: {
     label: "Working Nomads",
@@ -81,7 +89,32 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     order: 107,
     category: "pipeline",
   },
-  manual: { label: "Manual", order: 110, category: "manual" },
+  nofluffjobs: {
+    label: "NoFluffJobs",
+    order: 108,
+    category: "pipeline",
+  },
+  pracujpl: {
+    label: "pracuj.pl",
+    order: 111,
+    category: "pipeline",
+  },
+  theprotocol: {
+    label: "theprotocol.it",
+    order: 112,
+    category: "pipeline",
+  },
+  bulldogjob: {
+    label: "BulldogJob",
+    order: 110,
+    category: "pipeline",
+  },
+  justjoinit: {
+    label: "JustJoin.it",
+    order: 109,
+    category: "pipeline",
+  },
+  manual: { label: "Manual", order: 120, category: "manual" },
 };
 
 export const PIPELINE_EXTRACTOR_SOURCE_IDS = EXTRACTOR_SOURCE_IDS.filter(

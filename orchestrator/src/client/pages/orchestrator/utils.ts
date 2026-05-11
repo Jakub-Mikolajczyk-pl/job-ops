@@ -257,6 +257,26 @@ export const getEnabledSources = (
       enabled.push(source);
       continue;
     }
+    if (source === "bulldogjob") {
+      enabled.push(source);
+      continue;
+    }
+    if (source === "justjoinit") {
+      enabled.push(source);
+      continue;
+    }
+    if (source === "pracujpl") {
+      enabled.push(source);
+      continue;
+    }
+    if (source === "theprotocol") {
+      enabled.push(source);
+      continue;
+    }
+    if (source === "nofluffjobs") {
+      enabled.push(source);
+      continue;
+    }
     if (
       source === "indeed" ||
       source === "linkedin" ||

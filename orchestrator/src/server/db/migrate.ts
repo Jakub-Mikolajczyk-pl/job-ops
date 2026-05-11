@@ -14,7 +14,7 @@ const DB_PATH = join(getDataDir(), "jobs.db");
 // Ensure data directory exists
 const dataDir = dirname(DB_PATH);
 if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
+	mkdirSync(dataDir, { recursive: true });
 }
 
 const sqlite = new Database(DB_PATH);
@@ -23,52 +23,52 @@ const DEFAULT_TENANT_NAME = "JobOps";
 const DEFAULT_TENANT_SLUG = "default";
 
 function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+	return `'${value.replace(/'/g, "''")}'`;
 }
 
 function tableHasColumn(tableName: string, columnName: string): boolean {
-  const columns = sqlite
-    .prepare(`PRAGMA table_info(${tableName})`)
-    .all() as Array<{ name: string }>;
-  return columns.some((column) => column.name === columnName);
+	const columns = sqlite
+		.prepare(`PRAGMA table_info(${tableName})`)
+		.all() as Array<{ name: string }>;
+	return columns.some((column) => column.name === columnName);
 }
 
 function tableExists(tableName: string): boolean {
-  const row = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(tableName);
-  return Boolean(row);
+	const row = sqlite
+		.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+		.get(tableName);
+	return Boolean(row);
 }
 
 function addTenantColumn(tableName: string): void {
-  if (!tableExists(tableName) || tableHasColumn(tableName, "tenant_id")) {
-    return;
-  }
-  sqlite.exec(
-    `ALTER TABLE ${tableName} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ${sqlString(DEFAULT_TENANT_ID)}`,
-  );
+	if (!tableExists(tableName) || tableHasColumn(tableName, "tenant_id")) {
+		return;
+	}
+	sqlite.exec(
+		`ALTER TABLE ${tableName} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ${sqlString(DEFAULT_TENANT_ID)}`,
+	);
 }
 
 function hashPasswordSync(password: string): {
-  passwordHash: string;
-  passwordSalt: string;
+	passwordHash: string;
+	passwordSalt: string;
 } {
-  const passwordSalt = randomBytes(16).toString("base64url");
-  const passwordHash = scryptSync(password, passwordSalt, 64).toString(
-    "base64url",
-  );
-  return { passwordHash, passwordSalt };
+	const passwordSalt = randomBytes(16).toString("base64url");
+	const passwordHash = scryptSync(password, passwordSalt, 64).toString(
+		"base64url",
+	);
+	return { passwordHash, passwordSalt };
 }
 
 const pipelineRunsHasConfigSnapshot = tableHasColumn(
-  "pipeline_runs",
-  "config_snapshot",
+	"pipeline_runs",
+	"config_snapshot",
 );
 const pipelineRunsHasTenantId = tableHasColumn("pipeline_runs", "tenant_id");
 const jobsHasPdfRegenerating = tableHasColumn("jobs", "pdf_regenerating");
 
 const migrations = [
-  `CREATE TABLE IF NOT EXISTS tenants (
+	`CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -76,10 +76,10 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
-  `INSERT OR IGNORE INTO tenants(id, name, slug, created_at, updated_at)
+	`INSERT OR IGNORE INTO tenants(id, name, slug, created_at, updated_at)
    VALUES (${sqlString(DEFAULT_TENANT_ID)}, ${sqlString(DEFAULT_TENANT_NAME)}, ${sqlString(DEFAULT_TENANT_SLUG)}, datetime('now'), datetime('now'))`,
 
-  `CREATE TABLE IF NOT EXISTS users (
+	`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     display_name TEXT,
@@ -91,7 +91,7 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
-  `CREATE TABLE IF NOT EXISTS tenant_memberships (
+	`CREATE TABLE IF NOT EXISTS tenant_memberships (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     tenant_id TEXT NOT NULL,
@@ -103,7 +103,7 @@ const migrations = [
     UNIQUE(user_id, tenant_id)
   )`,
 
-  `CREATE TABLE IF NOT EXISTS jobs (
+	`CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     source TEXT NOT NULL DEFAULT 'gradcracker',
@@ -171,7 +171,7 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS pipeline_runs (
+	`CREATE TABLE IF NOT EXISTS pipeline_runs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     started_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -187,7 +187,7 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS settings (
+	`CREATE TABLE IF NOT EXISTS settings (
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     key TEXT NOT NULL,
     value TEXT NOT NULL,
@@ -197,7 +197,7 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS analytics_install_state (
+	`CREATE TABLE IF NOT EXISTS analytics_install_state (
     id TEXT PRIMARY KEY,
     distinct_id TEXT NOT NULL,
     installed_at TEXT NOT NULL,
@@ -207,7 +207,7 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
-  `CREATE TABLE IF NOT EXISTS analytics_server_event_replays (
+	`CREATE TABLE IF NOT EXISTS analytics_server_event_replays (
     event_key TEXT PRIMARY KEY,
     event_name TEXT NOT NULL,
     occurred_at INTEGER NOT NULL,
@@ -218,13 +218,13 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
-  `CREATE INDEX IF NOT EXISTS idx_analytics_server_event_replays_event_name
+	`CREATE INDEX IF NOT EXISTS idx_analytics_server_event_replays_event_name
     ON analytics_server_event_replays(event_name)`,
 
-  `CREATE INDEX IF NOT EXISTS idx_analytics_server_event_replays_occurred_at
+	`CREATE INDEX IF NOT EXISTS idx_analytics_server_event_replays_occurred_at
     ON analytics_server_event_replays(occurred_at)`,
 
-  `CREATE TABLE IF NOT EXISTS analytics_milestones (
+	`CREATE TABLE IF NOT EXISTS analytics_milestones (
     milestone TEXT PRIMARY KEY,
     first_seen_at INTEGER NOT NULL,
     first_session_id TEXT,
@@ -233,10 +233,10 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
-  `CREATE INDEX IF NOT EXISTS idx_analytics_milestones_first_seen_at
+	`CREATE INDEX IF NOT EXISTS idx_analytics_milestones_first_seen_at
     ON analytics_milestones(first_seen_at)`,
 
-  `CREATE TABLE IF NOT EXISTS auth_sessions (
+	`CREATE TABLE IF NOT EXISTS auth_sessions (
     id TEXT PRIMARY KEY,
     subject TEXT NOT NULL,
     user_id TEXT,
@@ -249,13 +249,13 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
+	`CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
     ON auth_sessions(expires_at)`,
 
-  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at
+	`CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at
     ON auth_sessions(revoked_at)`,
 
-  `CREATE TABLE IF NOT EXISTS design_resume_documents (
+	`CREATE TABLE IF NOT EXISTS design_resume_documents (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     title TEXT NOT NULL,
@@ -269,7 +269,7 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS design_resume_assets (
+	`CREATE TABLE IF NOT EXISTS design_resume_assets (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     document_id TEXT NOT NULL,
@@ -284,10 +284,10 @@ const migrations = [
     FOREIGN KEY (document_id) REFERENCES design_resume_documents(id) ON DELETE CASCADE
   )`,
 
-  `CREATE INDEX IF NOT EXISTS idx_design_resume_assets_document_id
+	`CREATE INDEX IF NOT EXISTS idx_design_resume_assets_document_id
     ON design_resume_assets(document_id)`,
 
-  `CREATE TABLE IF NOT EXISTS job_chat_threads (
+	`CREATE TABLE IF NOT EXISTS job_chat_threads (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     job_id TEXT NOT NULL,
@@ -301,7 +301,7 @@ const migrations = [
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS job_chat_messages (
+	`CREATE TABLE IF NOT EXISTS job_chat_messages (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     thread_id TEXT NOT NULL,
@@ -322,7 +322,7 @@ const migrations = [
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS job_chat_runs (
+	`CREATE TABLE IF NOT EXISTS job_chat_runs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     thread_id TEXT NOT NULL,
@@ -342,7 +342,7 @@ const migrations = [
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS stage_events (
+	`CREATE TABLE IF NOT EXISTS stage_events (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     application_id TEXT NOT NULL,
@@ -357,7 +357,7 @@ const migrations = [
     FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS tasks (
+	`CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     application_id TEXT NOT NULL,
@@ -370,7 +370,7 @@ const migrations = [
     FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS job_notes (
+	`CREATE TABLE IF NOT EXISTS job_notes (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     job_id TEXT NOT NULL,
@@ -382,10 +382,10 @@ const migrations = [
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE INDEX IF NOT EXISTS idx_job_notes_job_updated
+	`CREATE INDEX IF NOT EXISTS idx_job_notes_job_updated
     ON job_notes(job_id, updated_at)`,
 
-  `CREATE TABLE IF NOT EXISTS interviews (
+	`CREATE TABLE IF NOT EXISTS interviews (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     application_id TEXT NOT NULL,
@@ -397,7 +397,7 @@ const migrations = [
     FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS post_application_integrations (
+	`CREATE TABLE IF NOT EXISTS post_application_integrations (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
@@ -414,7 +414,7 @@ const migrations = [
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS post_application_sync_runs (
+	`CREATE TABLE IF NOT EXISTS post_application_sync_runs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
@@ -438,7 +438,7 @@ const migrations = [
     FOREIGN KEY (integration_id) REFERENCES post_application_integrations(id) ON DELETE SET NULL
   )`,
 
-  `CREATE TABLE IF NOT EXISTS post_application_messages (
+	`CREATE TABLE IF NOT EXISTS post_application_messages (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
@@ -476,7 +476,7 @@ const migrations = [
     UNIQUE(tenant_id, provider, account_key, external_message_id)
   )`,
 
-  `CREATE TABLE IF NOT EXISTS tracer_links (
+	`CREATE TABLE IF NOT EXISTS tracer_links (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     token TEXT NOT NULL UNIQUE,
@@ -493,7 +493,7 @@ const migrations = [
     UNIQUE(tenant_id, job_id, source_path, destination_url_hash)
   )`,
 
-  `CREATE TABLE IF NOT EXISTS tracer_click_events (
+	`CREATE TABLE IF NOT EXISTS tracer_click_events (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     tracer_link_id TEXT NOT NULL,
@@ -510,12 +510,12 @@ const migrations = [
     FOREIGN KEY (tracer_link_id) REFERENCES tracer_links(id) ON DELETE CASCADE
   )`,
 
-  // Rename settings key: webhookUrl -> pipelineWebhookUrl (safe to re-run)
-  `INSERT OR REPLACE INTO settings(key, value, created_at, updated_at)
+	// Rename settings key: webhookUrl -> pipelineWebhookUrl (safe to re-run)
+	`INSERT OR REPLACE INTO settings(key, value, created_at, updated_at)
    SELECT 'pipelineWebhookUrl', value, created_at, updated_at FROM settings WHERE key = 'webhookUrl'`,
-  `DELETE FROM settings WHERE key = 'webhookUrl'`,
-  // Drop legacy settings keys that are no longer read by the app.
-  `DELETE FROM settings
+	`DELETE FROM settings WHERE key = 'webhookUrl'`,
+	// Drop legacy settings keys that are no longer read by the app.
+	`DELETE FROM settings
    WHERE key IN (
      'jobspyHoursOld',
      'jobspySites',
@@ -524,72 +524,72 @@ const migrations = [
      'openrouterApiKey'
    )`,
 
-  // Add source column for existing databases (safe to skip if already present)
-  `ALTER TABLE jobs ADD COLUMN source TEXT NOT NULL DEFAULT 'gradcracker'`,
-  `UPDATE jobs SET source = 'gradcracker' WHERE source IS NULL OR source = ''`,
+	// Add source column for existing databases (safe to skip if already present)
+	`ALTER TABLE jobs ADD COLUMN source TEXT NOT NULL DEFAULT 'gradcracker'`,
+	`UPDATE jobs SET source = 'gradcracker' WHERE source IS NULL OR source = ''`,
 
-  // Add JobSpy columns for existing databases (safe to skip if already present)
-  `ALTER TABLE jobs ADD COLUMN source_job_id TEXT`,
-  `ALTER TABLE jobs ADD COLUMN job_url_direct TEXT`,
-  `ALTER TABLE jobs ADD COLUMN date_posted TEXT`,
-  `ALTER TABLE jobs ADD COLUMN job_type TEXT`,
-  `ALTER TABLE jobs ADD COLUMN salary_source TEXT`,
-  `ALTER TABLE jobs ADD COLUMN salary_interval TEXT`,
-  `ALTER TABLE jobs ADD COLUMN salary_min_amount REAL`,
-  `ALTER TABLE jobs ADD COLUMN salary_max_amount REAL`,
-  `ALTER TABLE jobs ADD COLUMN salary_currency TEXT`,
-  `ALTER TABLE jobs ADD COLUMN is_remote INTEGER`,
-  `ALTER TABLE jobs ADD COLUMN job_level TEXT`,
-  `ALTER TABLE jobs ADD COLUMN job_function TEXT`,
-  `ALTER TABLE jobs ADD COLUMN listing_type TEXT`,
-  `ALTER TABLE jobs ADD COLUMN emails TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_industry TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_logo TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_url_direct TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_addresses TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_num_employees TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_revenue TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_description TEXT`,
-  `ALTER TABLE jobs ADD COLUMN skills TEXT`,
-  `ALTER TABLE jobs ADD COLUMN experience_range TEXT`,
-  `ALTER TABLE jobs ADD COLUMN company_rating REAL`,
-  `ALTER TABLE jobs ADD COLUMN company_reviews_count INTEGER`,
-  `ALTER TABLE jobs ADD COLUMN vacancy_count INTEGER`,
-  `ALTER TABLE jobs ADD COLUMN work_from_home_type TEXT`,
-  `ALTER TABLE jobs ADD COLUMN location_evidence TEXT`,
-  `ALTER TABLE jobs ADD COLUMN selected_project_ids TEXT`,
-  `ALTER TABLE jobs ADD COLUMN tailored_headline TEXT`,
-  `ALTER TABLE jobs ADD COLUMN tailored_skills TEXT`,
-  `ALTER TABLE jobs ADD COLUMN tracer_links_enabled INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE jobs ADD COLUMN pdf_source TEXT CHECK(pdf_source IN ('generated', 'uploaded'))`,
-  `ALTER TABLE jobs ADD COLUMN pdf_regenerating INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE jobs ADD COLUMN pdf_fingerprint TEXT`,
-  `ALTER TABLE jobs ADD COLUMN pdf_generated_at TEXT`,
+	// Add JobSpy columns for existing databases (safe to skip if already present)
+	`ALTER TABLE jobs ADD COLUMN source_job_id TEXT`,
+	`ALTER TABLE jobs ADD COLUMN job_url_direct TEXT`,
+	`ALTER TABLE jobs ADD COLUMN date_posted TEXT`,
+	`ALTER TABLE jobs ADD COLUMN job_type TEXT`,
+	`ALTER TABLE jobs ADD COLUMN salary_source TEXT`,
+	`ALTER TABLE jobs ADD COLUMN salary_interval TEXT`,
+	`ALTER TABLE jobs ADD COLUMN salary_min_amount REAL`,
+	`ALTER TABLE jobs ADD COLUMN salary_max_amount REAL`,
+	`ALTER TABLE jobs ADD COLUMN salary_currency TEXT`,
+	`ALTER TABLE jobs ADD COLUMN is_remote INTEGER`,
+	`ALTER TABLE jobs ADD COLUMN job_level TEXT`,
+	`ALTER TABLE jobs ADD COLUMN job_function TEXT`,
+	`ALTER TABLE jobs ADD COLUMN listing_type TEXT`,
+	`ALTER TABLE jobs ADD COLUMN emails TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_industry TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_logo TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_url_direct TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_addresses TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_num_employees TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_revenue TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_description TEXT`,
+	`ALTER TABLE jobs ADD COLUMN skills TEXT`,
+	`ALTER TABLE jobs ADD COLUMN experience_range TEXT`,
+	`ALTER TABLE jobs ADD COLUMN company_rating REAL`,
+	`ALTER TABLE jobs ADD COLUMN company_reviews_count INTEGER`,
+	`ALTER TABLE jobs ADD COLUMN vacancy_count INTEGER`,
+	`ALTER TABLE jobs ADD COLUMN work_from_home_type TEXT`,
+	`ALTER TABLE jobs ADD COLUMN location_evidence TEXT`,
+	`ALTER TABLE jobs ADD COLUMN selected_project_ids TEXT`,
+	`ALTER TABLE jobs ADD COLUMN tailored_headline TEXT`,
+	`ALTER TABLE jobs ADD COLUMN tailored_skills TEXT`,
+	`ALTER TABLE jobs ADD COLUMN tracer_links_enabled INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE jobs ADD COLUMN pdf_source TEXT CHECK(pdf_source IN ('generated', 'uploaded'))`,
+	`ALTER TABLE jobs ADD COLUMN pdf_regenerating INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE jobs ADD COLUMN pdf_fingerprint TEXT`,
+	`ALTER TABLE jobs ADD COLUMN pdf_generated_at TEXT`,
 
-  // Add sponsor match columns for visa sponsor matching feature
-  `ALTER TABLE jobs ADD COLUMN sponsor_match_score REAL`,
-  `ALTER TABLE jobs ADD COLUMN sponsor_match_names TEXT`,
+	// Add sponsor match columns for visa sponsor matching feature
+	`ALTER TABLE jobs ADD COLUMN sponsor_match_score REAL`,
+	`ALTER TABLE jobs ADD COLUMN sponsor_match_names TEXT`,
 
-  // Add application tracking columns
-  `ALTER TABLE jobs ADD COLUMN outcome TEXT`,
-  `ALTER TABLE jobs ADD COLUMN closed_at INTEGER`,
-  `ALTER TABLE jobs ADD COLUMN ready_at TEXT`,
-  `ALTER TABLE stage_events ADD COLUMN outcome TEXT`,
-  `ALTER TABLE stage_events ADD COLUMN title TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE stage_events ADD COLUMN group_id TEXT`,
-  `UPDATE jobs
+	// Add application tracking columns
+	`ALTER TABLE jobs ADD COLUMN outcome TEXT`,
+	`ALTER TABLE jobs ADD COLUMN closed_at INTEGER`,
+	`ALTER TABLE jobs ADD COLUMN ready_at TEXT`,
+	`ALTER TABLE stage_events ADD COLUMN outcome TEXT`,
+	`ALTER TABLE stage_events ADD COLUMN title TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stage_events ADD COLUMN group_id TEXT`,
+	`UPDATE jobs
    SET ready_at = COALESCE(ready_at, updated_at)
    WHERE status = 'ready' AND ready_at IS NULL`,
 
-  // Smart-router columns for existing databases.
-  `ALTER TABLE post_application_messages ADD COLUMN match_confidence INTEGER`,
-  `ALTER TABLE post_application_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'other' CHECK(message_type IN ('interview', 'rejection', 'offer', 'update', 'other'))`,
-  `ALTER TABLE post_application_messages ADD COLUMN stage_event_payload TEXT`,
-  `ALTER TABLE post_application_messages ADD COLUMN processing_status TEXT NOT NULL DEFAULT 'pending_user' CHECK(processing_status IN ('auto_linked', 'pending_user', 'manual_linked', 'ignored'))`,
-  `UPDATE post_application_messages
+	// Smart-router columns for existing databases.
+	`ALTER TABLE post_application_messages ADD COLUMN match_confidence INTEGER`,
+	`ALTER TABLE post_application_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'other' CHECK(message_type IN ('interview', 'rejection', 'offer', 'update', 'other'))`,
+	`ALTER TABLE post_application_messages ADD COLUMN stage_event_payload TEXT`,
+	`ALTER TABLE post_application_messages ADD COLUMN processing_status TEXT NOT NULL DEFAULT 'pending_user' CHECK(processing_status IN ('auto_linked', 'pending_user', 'manual_linked', 'ignored'))`,
+	`UPDATE post_application_messages
    SET match_confidence = CAST(round(COALESCE(relevance_llm_score, 0)) AS INTEGER)
    WHERE match_confidence IS NULL`,
-  `UPDATE post_application_messages
+	`UPDATE post_application_messages
    SET message_type = CASE
       WHEN lower(COALESCE(classification_label, '')) LIKE '%interview%' THEN 'interview'
       WHEN lower(COALESCE(classification_label, '')) LIKE '%offer%' THEN 'offer'
@@ -597,21 +597,21 @@ const migrations = [
       WHEN lower(COALESCE(classification_label, '')) IN ('false positive', 'did not apply - inbound request') THEN 'other'
       ELSE 'update'
    END`,
-  `UPDATE post_application_messages
+	`UPDATE post_application_messages
    SET processing_status = CASE
       WHEN review_status = 'approved' THEN 'manual_linked'
       WHEN review_status IN ('pending_review', 'no_reliable_match') THEN 'pending_user'
       ELSE 'ignored'
    END`,
-  `DROP TABLE IF EXISTS post_application_message_candidates`,
-  `DROP TABLE IF EXISTS post_application_message_links`,
+	`DROP TABLE IF EXISTS post_application_message_candidates`,
+	`DROP TABLE IF EXISTS post_application_message_links`,
 
-  // Protect child tables (stage_events/tasks/interviews) during parent table rebuilds.
-  // Without this, dropping/replacing `jobs` can cascade-delete historical stage data.
-  `PRAGMA foreign_keys = OFF`,
+	// Protect child tables (stage_events/tasks/interviews) during parent table rebuilds.
+	// Without this, dropping/replacing `jobs` can cascade-delete historical stage data.
+	`PRAGMA foreign_keys = OFF`,
 
-  // Ensure pipeline_runs status supports "cancelled" for existing databases.
-  `CREATE TABLE IF NOT EXISTS pipeline_runs_new (
+	// Ensure pipeline_runs status supports "cancelled" for existing databases.
+	`CREATE TABLE IF NOT EXISTS pipeline_runs_new (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     started_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -626,18 +626,18 @@ const migrations = [
     result_summary TEXT,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
-  pipelineRunsHasConfigSnapshot
-    ? `INSERT OR REPLACE INTO pipeline_runs_new (id, tenant_id, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, config_snapshot, requested_config, effective_config, result_summary)
+	pipelineRunsHasConfigSnapshot
+		? `INSERT OR REPLACE INTO pipeline_runs_new (id, tenant_id, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, config_snapshot, requested_config, effective_config, result_summary)
    SELECT id, ${pipelineRunsHasTenantId ? `COALESCE(tenant_id, ${sqlString(DEFAULT_TENANT_ID)})` : sqlString(DEFAULT_TENANT_ID)}, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, config_snapshot, NULL, NULL, NULL
    FROM pipeline_runs`
-    : `INSERT OR REPLACE INTO pipeline_runs_new (id, tenant_id, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, config_snapshot, requested_config, effective_config, result_summary)
+		: `INSERT OR REPLACE INTO pipeline_runs_new (id, tenant_id, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, config_snapshot, requested_config, effective_config, result_summary)
    SELECT id, ${sqlString(DEFAULT_TENANT_ID)}, started_at, completed_at, status, jobs_discovered, jobs_processed, error_message, NULL, NULL, NULL, NULL
    FROM pipeline_runs`,
-  `DROP TABLE IF EXISTS pipeline_runs`,
-  `ALTER TABLE pipeline_runs_new RENAME TO pipeline_runs`,
+	`DROP TABLE IF EXISTS pipeline_runs`,
+	`ALTER TABLE pipeline_runs_new RENAME TO pipeline_runs`,
 
-  // Ensure jobs status supports "in_progress" for existing databases.
-  `CREATE TABLE IF NOT EXISTS jobs_new (
+	// Ensure jobs status supports "in_progress" for existing databases.
+	`CREATE TABLE IF NOT EXISTS jobs_new (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     source TEXT NOT NULL DEFAULT 'gradcracker',
@@ -706,7 +706,7 @@ const migrations = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`,
-  `INSERT OR REPLACE INTO jobs_new (
+	`INSERT OR REPLACE INTO jobs_new (
     id, tenant_id, source, source_job_id, job_url_direct, date_posted, job_type, salary_source, salary_interval,
     salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_function, listing_type,
     emails, company_industry, company_logo, company_url_direct, company_addresses, company_num_employees,
@@ -730,38 +730,38 @@ const migrations = [
     ready_at,
     applied_at, created_at, updated_at
   FROM jobs`,
-  `DROP TABLE IF EXISTS jobs`,
-  `ALTER TABLE jobs_new RENAME TO jobs`,
-  `UPDATE jobs
+	`DROP TABLE IF EXISTS jobs`,
+	`ALTER TABLE jobs_new RENAME TO jobs`,
+	`UPDATE jobs
    SET pdf_source = 'generated'
    WHERE pdf_path IS NOT NULL
      AND pdf_source IS NULL`,
-  `PRAGMA foreign_keys = ON`,
+	`PRAGMA foreign_keys = ON`,
 
-  `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_tenant_job_url_unique ON jobs(tenant_id, job_url)`,
-  `CREATE INDEX IF NOT EXISTS idx_jobs_tenant_status ON jobs(tenant_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_stage_events_application_id ON stage_events(application_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_stage_events_occurred_at ON stage_events(occurred_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_tasks_application_id ON tasks(application_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)`,
-  `CREATE INDEX IF NOT EXISTS idx_interviews_application_id ON interviews(application_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_post_app_sync_runs_provider_account_started_at ON post_application_sync_runs(provider, account_key, started_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_post_app_messages_provider_account_processing_status ON post_application_messages(provider, account_key, processing_status)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_threads_job_updated ON job_chat_threads(job_id, updated_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_thread_created ON job_chat_messages(thread_id, created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_runs_thread_status ON job_chat_runs(thread_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_links_token ON tracer_links(token)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_links_job_id ON tracer_links(job_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_tracer_link_id ON tracer_click_events(tracer_link_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_clicked_at ON tracer_click_events(clicked_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_is_likely_bot ON tracer_click_events(is_likely_bot)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_unique_fingerprint_hash ON tracer_click_events(unique_fingerprint_hash)`,
-  // Ensure only one running run per thread; backfill any duplicates first.
-  `WITH ranked AS (
+	`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_tenant_job_url_unique ON jobs(tenant_id, job_url)`,
+	`CREATE INDEX IF NOT EXISTS idx_jobs_tenant_status ON jobs(tenant_id, status)`,
+	`CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_stage_events_application_id ON stage_events(application_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_stage_events_occurred_at ON stage_events(occurred_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_application_id ON tasks(application_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)`,
+	`CREATE INDEX IF NOT EXISTS idx_interviews_application_id ON interviews(application_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_post_app_sync_runs_provider_account_started_at ON post_application_sync_runs(provider, account_key, started_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_post_app_messages_provider_account_processing_status ON post_application_messages(provider, account_key, processing_status)`,
+	`CREATE INDEX IF NOT EXISTS idx_job_chat_threads_job_updated ON job_chat_threads(job_id, updated_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_job_chat_messages_thread_created ON job_chat_messages(thread_id, created_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_job_chat_runs_thread_status ON job_chat_runs(thread_id, status)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_links_token ON tracer_links(token)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_links_job_id ON tracer_links(job_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_click_events_tracer_link_id ON tracer_click_events(tracer_link_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_click_events_clicked_at ON tracer_click_events(clicked_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_click_events_is_likely_bot ON tracer_click_events(is_likely_bot)`,
+	`CREATE INDEX IF NOT EXISTS idx_tracer_click_events_unique_fingerprint_hash ON tracer_click_events(unique_fingerprint_hash)`,
+	// Ensure only one running run per thread; backfill any duplicates first.
+	`WITH ranked AS (
       SELECT
         id,
         ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY started_at DESC, id DESC) AS rank_in_thread
@@ -776,12 +776,12 @@ const migrations = [
       completed_at = COALESCE(completed_at, CAST(strftime('%s', 'now') AS INTEGER)),
       updated_at = datetime('now')
     WHERE id IN (SELECT id FROM ranked WHERE rank_in_thread > 1)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_runs_thread_running_unique
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_runs_thread_running_unique
    ON job_chat_runs(thread_id)
    WHERE status = 'running'`,
 
-  // Backfill: Create "Applied" events for legacy jobs that have applied_at set but no event entry
-  `INSERT INTO stage_events (id, application_id, title, from_stage, to_stage, occurred_at, metadata)
+	// Backfill: Create "Applied" events for legacy jobs that have applied_at set but no event entry
+	`INSERT INTO stage_events (id, application_id, title, from_stage, to_stage, occurred_at, metadata)
    SELECT
      'backfill-applied-' || id,
      id,
@@ -794,8 +794,8 @@ const migrations = [
    WHERE applied_at IS NOT NULL
      AND id NOT IN (SELECT application_id FROM stage_events WHERE to_stage = 'applied')`,
 
-  // Backfill: Create "Closed" events for legacy jobs already closed via outcome.
-  `INSERT INTO stage_events (id, application_id, title, from_stage, to_stage, occurred_at, metadata, outcome)
+	// Backfill: Create "Closed" events for legacy jobs already closed via outcome.
+	`INSERT INTO stage_events (id, application_id, title, from_stage, to_stage, occurred_at, metadata, outcome)
    SELECT
      'backfill-closed-' || jobs.id,
      jobs.id,
@@ -821,8 +821,8 @@ const migrations = [
    WHERE jobs.outcome IS NOT NULL
      AND jobs.id NOT IN (SELECT application_id FROM stage_events WHERE to_stage = 'closed')`,
 
-  // Backfill: Sync legacy workflow status from latest stage event.
-  `UPDATE jobs
+	// Backfill: Sync legacy workflow status from latest stage event.
+	`UPDATE jobs
    SET
      status = 'in_progress',
      updated_at = datetime('now')
@@ -843,17 +843,17 @@ const migrations = [
        'closed'
      )`,
 
-  // Branching conversations: add parent_message_id and active_child_id to job_chat_messages
-  `ALTER TABLE job_chat_messages ADD COLUMN parent_message_id TEXT`,
-  `ALTER TABLE job_chat_messages ADD COLUMN active_child_id TEXT`,
-  `ALTER TABLE job_chat_threads ADD COLUMN active_root_message_id TEXT`,
-  `ALTER TABLE job_chat_threads ADD COLUMN selected_note_ids TEXT NOT NULL DEFAULT '[]'`,
-  `ALTER TABLE pipeline_runs ADD COLUMN config_snapshot TEXT`,
-  `ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_version INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_completed_at TEXT`,
+	// Branching conversations: add parent_message_id and active_child_id to job_chat_messages
+	`ALTER TABLE job_chat_messages ADD COLUMN parent_message_id TEXT`,
+	`ALTER TABLE job_chat_messages ADD COLUMN active_child_id TEXT`,
+	`ALTER TABLE job_chat_threads ADD COLUMN active_root_message_id TEXT`,
+	`ALTER TABLE job_chat_threads ADD COLUMN selected_note_ids TEXT NOT NULL DEFAULT '[]'`,
+	`ALTER TABLE pipeline_runs ADD COLUMN config_snapshot TEXT`,
+	`ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_version INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_completed_at TEXT`,
 
-  // Backfill: link existing messages into a linear chain (each message's parent = its predecessor)
-  `UPDATE job_chat_messages
+	// Backfill: link existing messages into a linear chain (each message's parent = its predecessor)
+	`UPDATE job_chat_messages
    SET parent_message_id = (
      SELECT prev.id
      FROM job_chat_messages prev
@@ -864,8 +864,8 @@ const migrations = [
    )
    WHERE parent_message_id IS NULL`,
 
-  // Backfill: for regenerated messages, re-link as siblings (same parent as the message they replaced)
-  `UPDATE job_chat_messages
+	// Backfill: for regenerated messages, re-link as siblings (same parent as the message they replaced)
+	`UPDATE job_chat_messages
    SET parent_message_id = (
      SELECT orig.parent_message_id
      FROM job_chat_messages orig
@@ -873,8 +873,8 @@ const migrations = [
    )
    WHERE replaces_message_id IS NOT NULL`,
 
-  // Backfill: set active_child_id on every parent to its newest child
-  `UPDATE job_chat_messages
+	// Backfill: set active_child_id on every parent to its newest child
+	`UPDATE job_chat_messages
    SET active_child_id = (
      SELECT child.id
      FROM job_chat_messages child
@@ -884,10 +884,10 @@ const migrations = [
    )
    WHERE id IN (SELECT DISTINCT parent_message_id FROM job_chat_messages WHERE parent_message_id IS NOT NULL)`,
 
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_parent ON job_chat_messages(parent_message_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_job_chat_messages_parent ON job_chat_messages(parent_message_id)`,
 
-  // Backfill: Mark closed applications from latest stage event.
-  `UPDATE jobs
+	// Backfill: Mark closed applications from latest stage event.
+	`UPDATE jobs
    SET
      status = 'in_progress',
      closed_at = (
@@ -913,103 +913,213 @@ const migrations = [
        ORDER BY se.occurred_at DESC, se.id DESC
        LIMIT 1
      ), 'applied') = 'closed'`,
+
+	// B8: reject loop
+	`ALTER TABLE jobs ADD COLUMN skip_reason TEXT`,
+
+	// A2/A3: normalized salary and canonical location columns
+	`ALTER TABLE jobs ADD COLUMN location_city TEXT`,
+	`ALTER TABLE jobs ADD COLUMN location_country TEXT`,
+	`ALTER TABLE jobs ADD COLUMN monthly_min_pln REAL`,
+	`ALTER TABLE jobs ADD COLUMN monthly_max_pln REAL`,
+	`CREATE INDEX IF NOT EXISTS idx_jobs_tenant_location_city ON jobs(tenant_id, location_city)`,
+	`CREATE INDEX IF NOT EXISTS idx_jobs_tenant_monthly_min ON jobs(tenant_id, monthly_min_pln)`,
+
+	// B5: saved searches
+	`CREATE TABLE IF NOT EXISTS saved_searches (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    query TEXT NOT NULL,
+    notify_telegram INTEGER DEFAULT 0,
+    last_notified_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+	`CREATE INDEX IF NOT EXISTS idx_saved_searches_tenant ON saved_searches(tenant_id)`,
+
+	// B7: skill demand snapshots
+	`CREATE TABLE IF NOT EXISTS skill_snapshots (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    skill TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    avg_score REAL
+  )`,
+	`CREATE INDEX IF NOT EXISTS idx_skill_snapshots_tenant_date ON skill_snapshots(tenant_id, snapshot_date)`,
+
+	// OE-3: active employments registry
+	`CREATE TABLE IF NOT EXISTS active_employments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+    job_id TEXT,
+    label TEXT NOT NULL,
+    employer TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    timezone TEXT,
+    core_hours_start TEXT,
+    core_hours_end TEXT,
+    monthly_gross_pln REAL,
+    weekly_hours_budget INTEGER,
+    industry TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+  )`,
+	`CREATE INDEX IF NOT EXISTS idx_active_employments_tenant ON active_employments(tenant_id)`,
+
+	// OE toolkit columns
+	`ALTER TABLE jobs ADD COLUMN oe_fitness_score REAL`,
+	`ALTER TABLE jobs ADD COLUMN oe_fitness_reasons TEXT`,
+	`ALTER TABLE jobs ADD COLUMN red_flags TEXT`,
+	`ALTER TABLE jobs ADD COLUMN async_score REAL`,
+	`ALTER TABLE jobs ADD COLUMN async_signals TEXT`,
+	`ALTER TABLE jobs ADD COLUMN weekly_hours_estimate INTEGER`,
+	`ALTER TABLE jobs ADD COLUMN weekly_hours_reasons TEXT`,
+
+	// Skill Gap: per-tenant ignore list (page-only scope)
+	`CREATE TABLE IF NOT EXISTS skill_exclusions (
+    tenant_id TEXT NOT NULL,
+    skill TEXT NOT NULL,
+    excluded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reason TEXT,
+    UNIQUE(tenant_id, skill)
+  )`,
+	`CREATE INDEX IF NOT EXISTS idx_skill_exclusions_tenant ON skill_exclusions(tenant_id)`,
+	`CREATE TABLE IF NOT EXISTS skill_watchlist (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    skill TEXT NOT NULL,
+    label TEXT,
+    title_pattern TEXT,
+    alert_on_drop INTEGER NOT NULL DEFAULT 0,
+    alert_on_rise INTEGER NOT NULL DEFAULT 0,
+    drop_threshold_pct INTEGER NOT NULL DEFAULT 30,
+    rise_threshold_pct INTEGER NOT NULL DEFAULT 30,
+    notes TEXT,
+    pending_match_count INTEGER NOT NULL DEFAULT 0,
+    last_match_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_watchlist_skill_unique ON skill_watchlist(tenant_id, skill)`,
+	`CREATE INDEX IF NOT EXISTS idx_skill_watchlist_tenant ON skill_watchlist(tenant_id)`,
+	`CREATE TABLE IF NOT EXISTS profile_market_snapshots (
+    tenant_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    total_jobs INTEGER NOT NULL,
+    jobs_above_60 INTEGER NOT NULL,
+    jobs_above_75 INTEGER NOT NULL,
+    avg_score REAL,
+    captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (tenant_id, snapshot_date)
+  )`,
+	`CREATE INDEX IF NOT EXISTS idx_profile_market_snapshots_tenant_date ON profile_market_snapshots(tenant_id, snapshot_date)`,
+	`ALTER TABLE active_employments ADD COLUMN hourly_rate_pln REAL`,
+	`ALTER TABLE active_employments ADD COLUMN monthly_hours INTEGER`,
 ];
 
 console.log("🔧 Running database migrations...");
 
 for (const migration of migrations) {
-  try {
-    sqlite.exec(migration);
-    console.log("✅ Migration applied");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const isDuplicateColumn =
-      (migration.toLowerCase().includes("alter table jobs add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table pipeline_runs add column") ||
-        migration.toLowerCase().includes("alter table tasks add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table pipeline_runs add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table post_application_messages add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table stage_events add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table job_chat_messages add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table job_chat_threads add column") ||
-        migration
-          .toLowerCase()
-          .includes("alter table analytics_install_state add column")) &&
-      message.toLowerCase().includes("duplicate column name");
+	try {
+		sqlite.exec(migration);
+		console.log("✅ Migration applied");
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		const isDuplicateColumn =
+			(migration.toLowerCase().includes("alter table jobs add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table pipeline_runs add column") ||
+				migration.toLowerCase().includes("alter table tasks add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table pipeline_runs add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table post_application_messages add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table stage_events add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table job_chat_messages add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table job_chat_threads add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table analytics_install_state add column") ||
+				migration
+					.toLowerCase()
+					.includes("alter table active_employments add column")) &&
+			message.toLowerCase().includes("duplicate column name");
 
-    if (isDuplicateColumn) {
-      console.log("↩️ Migration skipped (column already exists)");
-      continue;
-    }
+		if (isDuplicateColumn) {
+			console.log("↩️ Migration skipped (column already exists)");
+			continue;
+		}
 
-    const isLegacyBackfillOnFreshSchema =
-      migration.toLowerCase().includes("update post_application_messages") &&
-      message.toLowerCase().includes("no such column");
-    if (isLegacyBackfillOnFreshSchema) {
-      console.log("↩️ Migration skipped (legacy backfill not applicable)");
-      continue;
-    }
+		const isLegacyBackfillOnFreshSchema =
+			migration.toLowerCase().includes("update post_application_messages") &&
+			message.toLowerCase().includes("no such column");
+		if (isLegacyBackfillOnFreshSchema) {
+			console.log("↩️ Migration skipped (legacy backfill not applicable)");
+			continue;
+		}
 
-    // Optional performance-only migration: if this fails we should still boot
-    // existing databases and continue without the index.
-    const isOptionalOptimizationMigration = migration.includes(
-      "idx_jobs_status_discovered_at",
-    );
-    if (isOptionalOptimizationMigration) {
-      console.warn("⚠️ Optional migration skipped:", message);
-      continue;
-    }
+		// Optional performance-only migration: if this fails we should still boot
+		// existing databases and continue without the index.
+		const isOptionalOptimizationMigration = migration.includes(
+			"idx_jobs_status_discovered_at",
+		);
+		if (isOptionalOptimizationMigration) {
+			console.warn("⚠️ Optional migration skipped:", message);
+			continue;
+		}
 
-    console.error("❌ Migration failed:", error);
-    process.exit(1);
-  }
+		console.error("❌ Migration failed:", error);
+		process.exit(1);
+	}
 }
 
 function ensureTenantColumns(): void {
-  for (const tableName of [
-    "stage_events",
-    "tasks",
-    "job_notes",
-    "interviews",
-    "job_chat_threads",
-    "job_chat_messages",
-    "job_chat_runs",
-    "design_resume_documents",
-    "design_resume_assets",
-    "post_application_integrations",
-    "post_application_sync_runs",
-    "post_application_messages",
-    "tracer_links",
-    "tracer_click_events",
-    "auth_sessions",
-  ]) {
-    addTenantColumn(tableName);
-  }
+	for (const tableName of [
+		"stage_events",
+		"tasks",
+		"job_notes",
+		"interviews",
+		"job_chat_threads",
+		"job_chat_messages",
+		"job_chat_runs",
+		"design_resume_documents",
+		"design_resume_assets",
+		"post_application_integrations",
+		"post_application_sync_runs",
+		"post_application_messages",
+		"tracer_links",
+		"tracer_click_events",
+		"auth_sessions",
+	]) {
+		addTenantColumn(tableName);
+	}
 
-  if (
-    tableExists("auth_sessions") &&
-    !tableHasColumn("auth_sessions", "user_id")
-  ) {
-    sqlite.exec("ALTER TABLE auth_sessions ADD COLUMN user_id TEXT");
-  }
+	if (
+		tableExists("auth_sessions") &&
+		!tableHasColumn("auth_sessions", "user_id")
+	) {
+		sqlite.exec("ALTER TABLE auth_sessions ADD COLUMN user_id TEXT");
+	}
 }
 
 function rebuildSettingsTable(): void {
-  if (!tableExists("settings")) return;
+	if (!tableExists("settings")) return;
 
-  sqlite.exec(`CREATE TABLE IF NOT EXISTS settings_new (
+	sqlite.exec(`CREATE TABLE IF NOT EXISTS settings_new (
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
     key TEXT NOT NULL,
     value TEXT NOT NULL,
@@ -1019,66 +1129,66 @@ function rebuildSettingsTable(): void {
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   )`);
 
-  const hasTenantId = tableHasColumn("settings", "tenant_id");
-  sqlite.exec(`INSERT OR REPLACE INTO settings_new(tenant_id, key, value, created_at, updated_at)
+	const hasTenantId = tableHasColumn("settings", "tenant_id");
+	sqlite.exec(`INSERT OR REPLACE INTO settings_new(tenant_id, key, value, created_at, updated_at)
     SELECT ${hasTenantId ? `COALESCE(tenant_id, ${sqlString(DEFAULT_TENANT_ID)})` : sqlString(DEFAULT_TENANT_ID)}, key, value, created_at, updated_at
     FROM settings`);
-  sqlite.exec("DROP TABLE IF EXISTS settings");
-  sqlite.exec("ALTER TABLE settings_new RENAME TO settings");
+	sqlite.exec("DROP TABLE IF EXISTS settings");
+	sqlite.exec("ALTER TABLE settings_new RENAME TO settings");
 }
 
 function seedLegacyOwnerFromBasicAuth(): void {
-  const existing = sqlite
-    .prepare("SELECT count(*) AS count FROM users")
-    .get() as { count: number };
-  if (existing.count > 0) return;
+	const existing = sqlite
+		.prepare("SELECT count(*) AS count FROM users")
+		.get() as { count: number };
+	if (existing.count > 0) return;
 
-  const rawUsername = (process.env.BASIC_AUTH_USER || "").trim();
-  const username = rawUsername.toLowerCase();
-  const password = (process.env.BASIC_AUTH_PASSWORD || "").trim();
-  if (!username || !password) return;
+	const rawUsername = (process.env.BASIC_AUTH_USER || "").trim();
+	const username = rawUsername.toLowerCase();
+	const password = (process.env.BASIC_AUTH_PASSWORD || "").trim();
+	if (!username || !password) return;
 
-  const now = new Date().toISOString();
-  const userId = randomUUID();
-  const membershipId = randomUUID();
-  const { passwordHash, passwordSalt } = hashPasswordSync(password);
+	const now = new Date().toISOString();
+	const userId = randomUUID();
+	const membershipId = randomUUID();
+	const { passwordHash, passwordSalt } = hashPasswordSync(password);
 
-  sqlite
-    .prepare(
-      `INSERT INTO users(id, username, display_name, password_hash, password_salt, is_system_admin, is_disabled, created_at, updated_at)
+	sqlite
+		.prepare(
+			`INSERT INTO users(id, username, display_name, password_hash, password_salt, is_system_admin, is_disabled, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?)`,
-    )
-    .run(
-      userId,
-      username,
-      rawUsername || username,
-      passwordHash,
-      passwordSalt,
-      now,
-      now,
-    );
+		)
+		.run(
+			userId,
+			username,
+			rawUsername || username,
+			passwordHash,
+			passwordSalt,
+			now,
+			now,
+		);
 
-  sqlite
-    .prepare(
-      `INSERT OR IGNORE INTO tenant_memberships(id, user_id, tenant_id, role, created_at, updated_at)
+	sqlite
+		.prepare(
+			`INSERT OR IGNORE INTO tenant_memberships(id, user_id, tenant_id, role, created_at, updated_at)
        VALUES (?, ?, ?, 'owner', ?, ?)`,
-    )
-    .run(membershipId, userId, DEFAULT_TENANT_ID, now, now);
+		)
+		.run(membershipId, userId, DEFAULT_TENANT_ID, now, now);
 
-  sqlite.exec("DELETE FROM auth_sessions");
+	sqlite.exec("DELETE FROM auth_sessions");
 }
 
 console.log("🔐 Applying tenancy compatibility migrations...");
 ensureTenantColumns();
 rebuildSettingsTable();
 sqlite.exec(
-  "CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_tenant_key_unique ON settings(tenant_id, key)",
+	"CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_tenant_key_unique ON settings(tenant_id, key)",
 );
 sqlite.exec(
-  "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_tenant_job_url_unique ON jobs(tenant_id, job_url)",
+	"CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_tenant_job_url_unique ON jobs(tenant_id, job_url)",
 );
 sqlite.exec(
-  "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)",
+	"CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)",
 );
 seedLegacyOwnerFromBasicAuth();
 

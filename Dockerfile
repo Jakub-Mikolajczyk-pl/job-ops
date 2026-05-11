@@ -3,7 +3,7 @@
 # ============================================================================
 # SHARED BASE IMAGES
 # ============================================================================
-FROM node:22-slim AS runtime-base
+FROM node:20-slim AS runtime-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production

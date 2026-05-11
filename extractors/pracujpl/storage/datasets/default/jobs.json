@@ -1,0 +1,41 @@
+[
+  {
+    "source": "pracujpl",
+    "sourceJobId": "1004773440",
+    "title": "Power Platform Developer (k/m/n)",
+    "employer": "UPVANTA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "jobUrl": "https://www.pracuj.pl/praca/power-platform-developer-k-m-n-wroclaw-legnicka-70,oferta,1004773440",
+    "applicationLink": "https://www.pracuj.pl/praca/power-platform-developer-k-m-n-wroclaw-legnicka-70,oferta,1004773440",
+    "location": "Remote (Wrocław, Fabryczna)",
+    "isRemote": true,
+    "datePosted": "2026-05-08",
+    "salary": "110–130 zł netto (+ VAT) / godz.",
+    "skills": "Power Platform"
+  },
+  {
+    "source": "pracujpl",
+    "sourceJobId": "1004824113",
+    "title": "Regular Low Code Developer (m/f)",
+    "employer": "Consdata S.A.",
+    "jobUrl": "https://www.pracuj.pl/praca/regular-low-code-developer-m-f-poznan-boleslawa-krysiewicza-9,oferta,1004824113",
+    "applicationLink": "https://www.pracuj.pl/praca/regular-low-code-developer-m-f-poznan-boleslawa-krysiewicza-9,oferta,1004824113",
+    "location": "Remote (Poznań, Stare Miasto)",
+    "isRemote": true,
+    "datePosted": "2026-05-10",
+    "salary": "7 500–13 398 zł / mies. (zal. od umowy)",
+    "skills": "OutSystems, Mendix, Appian, HTML, CSS, BPMN"
+  },
+  {
+    "source": "pracujpl",
+    "sourceJobId": "1004824109",
+    "title": "Junior Low Code Developer (m/f)",
+    "employer": "Consdata S.A.",
+    "jobUrl": "https://www.pracuj.pl/praca/junior-low-code-developer-m-f-poznan-boleslawa-krysiewicza-9,oferta,1004824109",
+    "applicationLink": "https://www.pracuj.pl/praca/junior-low-code-developer-m-f-poznan-boleslawa-krysiewicza-9,oferta,1004824109",
+    "location": "Remote (Poznań, Stare Miasto)",
+    "isRemote": true,
+    "datePosted": "2026-05-10",
+    "salary": "5 000–9 366 zł / mies. (zal. od umowy)",
+    "skills": "OutSystems, Mendix, Appian, HTML, CSS"
+  }
+]

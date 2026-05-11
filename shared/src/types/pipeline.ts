@@ -107,6 +107,7 @@ export interface PipelineRunResultSummary {
   jobsScored: number | null;
   jobsSelected: number | null;
   sourceErrors: string[];
+  perSource?: Record<string, { jobsDiscovered: number; errors: number }>;
 }
 
 export interface PipelineRunSavedDetails {

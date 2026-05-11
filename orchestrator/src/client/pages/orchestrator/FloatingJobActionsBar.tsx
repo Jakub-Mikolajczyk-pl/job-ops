@@ -7,10 +7,12 @@ interface FloatingJobActionsBarProps {
   canMoveSelected: boolean;
   canSkipSelected: boolean;
   canRescoreSelected: boolean;
+  canCompareSelected: boolean;
   jobActionInFlight: boolean;
   onMoveToReady: () => void;
   onSkipSelected: () => void;
   onRescoreSelected: () => void;
+  onCompareSelected: () => void;
   onClear: () => void;
 }
 
@@ -19,10 +21,12 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   canMoveSelected,
   canSkipSelected,
   canRescoreSelected,
+  canCompareSelected,
   jobActionInFlight,
   onMoveToReady,
   onSkipSelected,
   onRescoreSelected,
+  onCompareSelected,
   onClear,
 }) => {
   return (
@@ -74,6 +78,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                   onClick={onRescoreSelected}
                 >
                   Recalculate match
+                </Button>
+              )}
+              {canCompareSelected && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={jobActionInFlight}
+                  onClick={onCompareSelected}
+                >
+                  Compare
                 </Button>
               )}
               <Button

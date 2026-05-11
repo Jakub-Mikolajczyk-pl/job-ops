@@ -3,6 +3,8 @@ import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
 import { resolveRequestOrigin } from "@server/infra/request-origin";
+import * as jobsRepo from "@server/repositories/jobs";
+import { generateInterviewPrep } from "@server/services/interview-prep";
 import {
   buildJobActionExecutionOptions,
   executeJobActionForJob,
@@ -302,10 +304,37 @@ jobsActionsRouter.post("/:id/process", async (req: Request, res: Response) => {
 jobsActionsRouter.post("/:id/skip", async (req: Request, res: Response) => {
   const result = await executeJobActionForJob("skip", req.params.id);
   if (!result.ok) return fail(res, mapJobActionFailure(result));
+  const { reason } = req.body ?? {};
+  if (typeof reason === "string" && reason.trim()) {
+    await jobsRepo.updateJob(req.params.id, { skipReason: reason.trim() });
+  }
   ok(res, await hydrateJobPdfFreshness(result.job));
 });
 
-jobsActionsRouter.post("/:id/rescore", async (req: Request, res: Response) => {
+jobsActionsRouter.post("/:id/interview-prep", async (req: Request, res: Response) => {
+  try {
+    const job = await jobsRepo.getJobById(req.params.id);
+    if (!job) return fail(res, { status: 404, code: "NOT_FOUND", message: "Job not found" });
+
+    const result = await generateInterviewPrep(job);
+    if (!result.success) {
+      return fail(res, { status: 500, code: "LLM_ERROR", message: result.error ?? "LLM call failed" });
+    }
+
+    const note = await jobsRepo.createJobNote({
+      jobId: job.id,
+      title: "Interview Prep",
+      content: result.markdown!,
+    });
+
+    ok(res, note);
+  } catch (error) {
+    fail(res, { status: 500, code: "INTERNAL_ERROR", message: String(error) });
+  }
+});
+
+jobsActionsRouter.post("/:id/rescore"
+, async (req: Request, res: Response) => {
   const result = await executeJobActionForJob(
     "rescore",
     req.params.id,

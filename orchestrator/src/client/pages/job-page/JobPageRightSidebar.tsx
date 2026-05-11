@@ -9,6 +9,9 @@ import {
   MoreHorizontal,
   PlusCircle,
   RefreshCcw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestion,
   Sparkles,
   Upload,
   XCircle,
@@ -53,6 +56,7 @@ type JobPageRightSidebarProps = {
   onCopyJobInfo: () => void;
   onRescore: () => void;
   onCheckSponsor: () => void;
+  onInterviewPrep: () => void;
 };
 
 export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
@@ -82,6 +86,7 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
   onCopyJobInfo,
   onRescore,
   onCheckSponsor,
+  onInterviewPrep,
 }) => (
   <aside className="space-y-4 xl:sticky xl:top-5">
     <section className="rounded-xl border border-border/50 bg-card/85 p-3">
@@ -115,6 +120,28 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
             Start Tailoring
           </Button>
         )}
+
+        {isReady && job.applyRisk && (() => {
+          const { level, reason } = job.applyRisk;
+          const cfg = {
+            low: { Icon: ShieldCheck, cls: "text-emerald-400", label: "Low apply risk" },
+            medium: { Icon: ShieldQuestion, cls: "text-amber-400", label: "Medium apply risk" },
+            high: { Icon: ShieldAlert, cls: "text-red-400", label: "High apply risk" },
+          }[level];
+          return (
+            <div className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs ${
+              level === "high" ? "border-red-500/20 bg-red-500/5" :
+              level === "medium" ? "border-amber-500/20 bg-amber-500/5" :
+              "border-emerald-500/20 bg-emerald-500/5"
+            }`}>
+              <cfg.Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${cfg.cls}`} />
+              <div>
+                <span className={`font-medium ${cfg.cls}`}>{cfg.label}</span>
+                <p className="mt-0.5 text-muted-foreground">{reason}</p>
+              </div>
+            </div>
+          );
+        })()}
 
         {isReady && (
           <Button
@@ -227,6 +254,19 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
           </Button>
         )}
 
+        {(isReady || isApplied || isInProgress) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 w-full justify-start"
+            onClick={onInterviewPrep}
+            disabled={isBusy}
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
+            Interview Prep
+          </Button>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -256,6 +296,9 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onCheckSponsor}>
               Check sponsorship status
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onInterviewPrep}>
+              Generate interview prep
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

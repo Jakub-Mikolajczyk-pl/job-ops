@@ -528,3 +528,16 @@ pipelineRouter.post("/solve-challenge", async (req: Request, res: Response) => {
     );
   }
 });
+
+pipelineRouter.get("/health", async (req: Request, res: Response) => {
+  try {
+    const health = await pipelineRepo.getPipelineHealth();
+    ok(res, health);
+  } catch (error) {
+    fail(res, {
+      status: 500,
+      code: "PIPELINE_HEALTH_ERROR" as const,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});

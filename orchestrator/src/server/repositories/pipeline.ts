@@ -270,3 +270,89 @@ export async function getPipelineRunInsights(
     },
   };
 }
+
+export interface SourceHealthRow {
+  source: string;
+  lastSuccessfulRun: string | null;
+  runsLast30d: number;
+  avgJobsPerRun: number;
+  errorRateLast30d: number;
+  lastError: string | null;
+  status: "ok" | "warn" | "error";
+}
+
+export async function getPipelineHealth(): Promise<SourceHealthRow[]> {
+  const tenantId = getActiveTenantId();
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const warnCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { pipelineRuns } = schema;
+
+  const runs = await db
+    .select({
+      startedAt: pipelineRuns.startedAt,
+      completedAt: pipelineRuns.completedAt,
+      status: pipelineRuns.status,
+      jobsDiscovered: pipelineRuns.jobsDiscovered,
+      errorMessage: pipelineRuns.errorMessage,
+      resultSummary: pipelineRuns.resultSummary,
+    })
+    .from(pipelineRuns)
+    .where(and(eq(pipelineRuns.tenantId, tenantId), gte(pipelineRuns.startedAt, cutoff)))
+    .orderBy(desc(pipelineRuns.startedAt));
+
+  // Group per source from resultSummary JSON
+  type SourceStats = {
+    runs: number; success: number; totalJobs: number; lastSuccess: string | null; lastError: string | null;
+  };
+  const bySource = new Map<string, SourceStats>();
+
+  for (const run of runs) {
+    const summary = run.resultSummary as Record<string, unknown> | null;
+    const sources: string[] = [];
+
+    type PerSourceData = { jobsDiscovered: number; errors: number };
+    let perSourceMap: Record<string, PerSourceData> | null = null;
+    if (summary && typeof summary === 'object') {
+      const ps = (summary as Record<string, unknown>).perSource;
+      if (ps && typeof ps === 'object') {
+        perSourceMap = ps as Record<string, PerSourceData>;
+        for (const src of Object.keys(perSourceMap)) {
+          sources.push(src);
+        }
+      }
+    }
+    // Fallback: treat whole run as one entry with key 'pipeline'
+    if (sources.length === 0) sources.push('pipeline');
+
+    for (const src of sources) {
+      const s = bySource.get(src) ?? { runs: 0, success: 0, totalJobs: 0, lastSuccess: null, lastError: null };
+      s.runs++;
+      if (run.status === 'completed') {
+        s.success++;
+        const srcJobs = perSourceMap?.[src]?.jobsDiscovered ?? (sources.length === 1 ? (run.jobsDiscovered ?? 0) : 0);
+        s.totalJobs += srcJobs;
+        if (!s.lastSuccess || run.startedAt > s.lastSuccess) s.lastSuccess = run.startedAt;
+      } else if (run.status === 'failed' && !s.lastError) {
+        s.lastError = run.errorMessage ?? 'unknown error';
+      }
+      bySource.set(src, s);
+    }
+  }
+
+  return [...bySource.entries()].map(([source, s]) => {
+    const errorRate = s.runs > 0 ? (s.runs - s.success) / s.runs : 0;
+    let status: "ok" | "warn" | "error" = "ok";
+    if (!s.lastSuccess) status = "error";
+    else if (s.lastSuccess < warnCutoff) status = "warn";
+    return {
+      source,
+      lastSuccessfulRun: s.lastSuccess,
+      runsLast30d: s.runs,
+      avgJobsPerRun: s.success > 0 ? Math.round(s.totalJobs / s.success) : 0,
+      errorRateLast30d: Math.round(errorRate * 100),
+      lastError: s.lastError,
+      status,
+    };
+  }).sort((a, b) => (b.runsLast30d - a.runsLast30d));
+}

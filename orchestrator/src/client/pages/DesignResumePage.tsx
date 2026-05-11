@@ -45,6 +45,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -506,6 +507,7 @@ export const DesignResumePage: React.FC = () => {
               >
                 <SheetHeader>
                   <SheetTitle>Design Resume</SheetTitle>
+                  <SheetDescription className="sr-only">Resume section navigation</SheetDescription>
                 </SheetHeader>
                 <div className="mt-6">{rail}</div>
               </SheetContent>

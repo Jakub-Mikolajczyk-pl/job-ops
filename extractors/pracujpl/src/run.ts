@@ -1,0 +1,152 @@
+import { spawn, spawnSync } from "node:child_process";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
+import type { CreateJobInput } from "@shared/types/jobs";
+import { toNumberOrNull, toStringOrNull } from "@shared/utils/type-conversion.js";
+
+const srcDir = dirname(fileURLToPath(import.meta.url));
+const EXTRACTOR_DIR = join(srcDir, "..");
+const DATASET_PATH = join(EXTRACTOR_DIR, "storage/datasets/default/jobs.json");
+const STORAGE_DATASET_DIR = join(EXTRACTOR_DIR, "storage/datasets/default");
+const JOBOPS_PROGRESS_PREFIX = "JOBOPS_PROGRESS ";
+const require = createRequire(import.meta.url);
+const TSX_CLI_PATH = resolveTsxCliPath();
+
+function resolveTsxCliPath(): string | null {
+  try { return require.resolve("tsx/dist/cli.mjs"); } catch { return null; }
+}
+
+function canRunNpmCommand(): boolean {
+  const result = spawnSync("npm", ["--version"], { stdio: "ignore" });
+  return !result.error && result.status === 0;
+}
+
+export type PracujProgressEvent =
+  | { type: "term_start"; termIndex: number; termTotal: number; searchTerm: string }
+  | { type: "page_fetched"; termIndex: number; termTotal: number; searchTerm: string; pageNo: number; resultsOnPage: number; totalCollected: number }
+  | { type: "term_complete"; termIndex: number; termTotal: number; searchTerm: string; jobsFoundTerm: number };
+
+export interface RunPracujOptions {
+  searchTerms?: string[];
+  workplaceTypes?: Array<"remote" | "hybrid" | "onsite">;
+  maxJobsPerTerm?: number;
+  onProgress?: (event: PracujProgressEvent) => void;
+}
+
+export interface PracujResult {
+  success: boolean;
+  jobs: CreateJobInput[];
+  error?: string;
+  challengeRequired?: string;
+}
+
+function parseProgressLine(line: string): PracujProgressEvent | null {
+  if (!line.startsWith(JOBOPS_PROGRESS_PREFIX)) return null;
+  const raw = line.slice(JOBOPS_PROGRESS_PREFIX.length).trim();
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+
+  const event = toStringOrNull(parsed.event);
+  const termIndex = toNumberOrNull(parsed.termIndex);
+  const termTotal = toNumberOrNull(parsed.termTotal);
+  const searchTerm = toStringOrNull(parsed.searchTerm) ?? "";
+  if (!event || termIndex === null || termTotal === null) return null;
+
+  if (event === "term_start") return { type: "term_start", termIndex, termTotal, searchTerm };
+  if (event === "page_fetched") {
+    return {
+      type: "page_fetched", termIndex, termTotal, searchTerm,
+      pageNo: toNumberOrNull(parsed.pageNo) ?? 0,
+      resultsOnPage: toNumberOrNull(parsed.resultsOnPage) ?? 0,
+      totalCollected: toNumberOrNull(parsed.totalCollected) ?? 0,
+    };
+  }
+  if (event === "term_complete") {
+    return { type: "term_complete", termIndex, termTotal, searchTerm, jobsFoundTerm: toNumberOrNull(parsed.jobsFoundTerm) ?? 0 };
+  }
+  return null;
+}
+
+async function readDataset(): Promise<CreateJobInput[]> {
+  const content = await readFile(DATASET_PATH, "utf-8");
+  const parsed = JSON.parse(content) as unknown;
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is CreateJobInput =>
+    Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof (item as any).jobUrl === "string",
+  );
+}
+
+async function clearStorageDataset(): Promise<void> {
+  await rm(STORAGE_DATASET_DIR, { recursive: true, force: true });
+  await mkdir(STORAGE_DATASET_DIR, { recursive: true });
+}
+
+export async function runPracuj(options: RunPracujOptions = {}): Promise<PracujResult> {
+  const useNpmCommand = canRunNpmCommand();
+  if (!useNpmCommand && !TSX_CLI_PATH) {
+    return { success: false, jobs: [], error: "Unable to execute pracuj.pl extractor (npm/tsx unavailable)" };
+  }
+
+  let challengeRequired: string | undefined;
+
+  try {
+    await clearStorageDataset();
+
+    await new Promise<void>((resolve, reject) => {
+      const extractorEnv = {
+        ...process.env,
+        JOBOPS_EMIT_PROGRESS: "1",
+        PRACUJPL_SEARCH_TERMS: JSON.stringify(options.searchTerms ?? ["software engineer"]),
+        PRACUJPL_WORKPLACE_TYPES: JSON.stringify(options.workplaceTypes ?? ["remote", "hybrid", "onsite"]),
+        PRACUJPL_MAX_JOBS_PER_TERM: String(options.maxJobsPerTerm ?? 50),
+        PRACUJPL_OUTPUT_JSON: DATASET_PATH,
+      };
+
+      const child = useNpmCommand
+        ? spawn("npm", ["run", "start"], { cwd: EXTRACTOR_DIR, stdio: ["ignore", "pipe", "pipe"], env: extractorEnv })
+        : (() => {
+            const tsxCliPath = TSX_CLI_PATH;
+            if (!tsxCliPath) throw new Error("tsx unavailable");
+            return spawn(process.execPath, [tsxCliPath, "src/main.ts"], {
+              cwd: EXTRACTOR_DIR, stdio: ["ignore", "pipe", "pipe"], env: extractorEnv,
+            });
+          })();
+
+      const handleLine = (line: string, stream: NodeJS.WriteStream) => {
+        if (line.startsWith(JOBOPS_PROGRESS_PREFIX)) {
+          const raw = line.slice(JOBOPS_PROGRESS_PREFIX.length).trim();
+          try {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            if (parsed.event === "challenge_required" && typeof parsed.url === "string") {
+              challengeRequired = parsed.url as string;
+              return;
+            }
+          } catch {}
+        }
+        const progressEvent = parseProgressLine(line);
+        if (progressEvent) { options.onProgress?.(progressEvent); return; }
+        stream.write(`${line}\n`);
+      };
+
+      const stdoutRl = child.stdout ? createInterface({ input: child.stdout }) : null;
+      const stderrRl = child.stderr ? createInterface({ input: child.stderr }) : null;
+      stdoutRl?.on("line", (line) => handleLine(line, process.stdout));
+      stderrRl?.on("line", (line) => handleLine(line, process.stderr));
+      child.on("close", (code) => {
+        stdoutRl?.close(); stderrRl?.close();
+        if (code === 0) resolve();
+        else reject(new Error(`pracuj.pl extractor exited with code ${code}`));
+      });
+      child.on("error", reject);
+    });
+
+    const jobs = await readDataset();
+    return { success: true, jobs };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, jobs: [], error: message, challengeRequired };
+  }
+}

@@ -24,7 +24,11 @@
     "db:drop": "tsx src/server/db/clear.ts --drop",
     "pipeline:run": "tsx src/server/pipeline/run.ts",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "pipeline:run:headless": "tsx src/server/pipeline/run-headless.ts",
+    "backfill:salary": "tsx scripts/backfill-salary.ts",
+    "snapshots:capture": "tsx scripts/snapshot-skills.ts",
+    "snapshots:market": "tsx scripts/snapshot-profile-market.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

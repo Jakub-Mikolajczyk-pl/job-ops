@@ -205,6 +205,119 @@ const AppliedDuplicatePill: React.FC<{
   );
 };
 
+interface OePillProps {
+  oeFitnessScore: number | null;
+  oeFitnessReasons: string | null;
+  redFlags: string | null;
+  asyncScore: number | null;
+}
+
+const OePill: React.FC<OePillProps> = ({
+  oeFitnessScore,
+  oeFitnessReasons,
+  redFlags,
+  asyncScore,
+}) => {
+  const parsedReasons = useMemo(() => {
+    if (!oeFitnessReasons) return [];
+    try {
+      return JSON.parse(oeFitnessReasons) as Array<{
+        rule: string;
+        delta: number;
+        evidence: string;
+      }>;
+    } catch {
+      return [];
+    }
+  }, [oeFitnessReasons]);
+
+  const parsedFlags = useMemo(() => {
+    if (!redFlags) return [];
+    try {
+      return JSON.parse(redFlags) as Array<{
+        id: string;
+        severity: string;
+        snippet: string;
+      }>;
+    } catch {
+      return [];
+    }
+  }, [redFlags]);
+
+  if (oeFitnessScore == null) return null;
+
+  const color =
+    oeFitnessScore >= 70
+      ? "text-emerald-400"
+      : oeFitnessScore >= 45
+        ? "text-amber-400"
+        : "text-rose-400";
+
+  const dot =
+    oeFitnessScore >= 70
+      ? "bg-emerald-500"
+      : oeFitnessScore >= 45
+        ? "bg-amber-500"
+        : "bg-rose-500";
+
+  const flagCount = parsedFlags.length;
+  const highFlags = parsedFlags.filter((f) => f.severity === "high").length;
+
+  const tooltip = (
+    <div className="space-y-2 max-w-xs">
+      <p className="text-xs font-medium">
+        OE-fitness: {oeFitnessScore}/100
+        {asyncScore != null && ` · Async: ${asyncScore}/100`}
+      </p>
+      {flagCount > 0 && (
+        <div>
+          <p className="text-xs font-medium text-rose-400">
+            {flagCount} red flag{flagCount !== 1 ? "s" : ""}
+            {highFlags > 0 ? ` (${highFlags} high)` : ""}
+          </p>
+          {parsedFlags.slice(0, 3).map((f) => (
+            <p key={f.id} className="text-[10px] text-muted-foreground mt-0.5">
+              <span className="font-medium">{f.id.replace(/_/g, " ")}</span>:{" "}
+              {f.snippet.length > 60 ? `${f.snippet.slice(0, 60)}…` : f.snippet}
+            </p>
+          ))}
+        </div>
+      )}
+      {parsedReasons.length > 0 && (
+        <div>
+          <p className="text-[10px] text-muted-foreground font-medium">Score breakdown:</p>
+          {parsedReasons
+            .filter((r) => r.delta !== 0)
+            .slice(0, 5)
+            .map((r) => (
+              <p key={r.rule} className="text-[10px] text-muted-foreground">
+                {r.delta > 0 ? "+" : ""}
+                {r.delta} {r.rule.replace(/_/g, " ")}
+              </p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <StatusIndicator
+      dotColor={dot}
+      label={
+        <span className={color}>
+          OE {oeFitnessScore}
+          {flagCount > 0 && (
+            <span className="text-rose-400 ml-1">⚑{flagCount}</span>
+          )}
+        </span>
+      }
+      tooltip={tooltip}
+      tooltipClassName="max-w-xs"
+      className="cursor-help"
+    />
+  );
+};
+
 export const JobHeader: React.FC<JobHeaderProps> = ({
   job,
   className,
@@ -326,6 +439,20 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
             className={tracerStatusTooltip ? "cursor-help" : undefined}
           />
           <AppliedDuplicatePill match={job.appliedDuplicateMatch} />
+          <OePill
+            oeFitnessScore={job.oeFitnessScore}
+            oeFitnessReasons={job.oeFitnessReasons}
+            redFlags={job.redFlags}
+            asyncScore={job.asyncScore}
+          />
+          {job.weeklyHoursEstimate != null && (
+            <span
+              className="inline-flex items-center rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+              title={`Estimated ~${job.weeklyHoursEstimate}h/week commitment`}
+            >
+              ~{job.weeklyHoursEstimate}h/wk
+            </span>
+          )}
           {showSponsorInfo && (
             <SponsorPill
               score={job.sponsorMatchScore}

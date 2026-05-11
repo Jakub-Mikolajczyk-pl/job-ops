@@ -65,6 +65,7 @@ import {
 } from "@/lib/utils";
 import * as api from "../api";
 import { ConfirmDelete } from "../components/ConfirmDelete";
+import { SkipReasonModal } from "../components/SkipReasonModal";
 import { GhostwriterPanel } from "../components/ghostwriter/GhostwriterPanel";
 import { JobDetailsEditDrawer } from "../components/JobDetailsEditDrawer";
 import {
@@ -137,6 +138,7 @@ export const JobPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isLogModalOpen, setIsLogModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [isSkipModalOpen, setIsSkipModalOpen] = React.useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = React.useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = React.useState(false);
   const [activeAction, setActiveAction] = React.useState<string | null>(null);
@@ -428,12 +430,9 @@ export const JobPage: React.FC = () => {
     });
   };
 
-  const handleSkip = async () => {
-    await runAction("skip", async () => {
-      if (!job) return;
-      await skipJobMutation.mutateAsync(job.id);
-      toast.message("Job skipped");
-    });
+  const handleSkip = () => {
+    if (!job) return;
+    setIsSkipModalOpen(true);
   };
 
   const handleRescore = async () => {
@@ -441,6 +440,15 @@ export const JobPage: React.FC = () => {
       if (!job) return;
       await rescoreJobMutation.mutateAsync(job.id);
       toast.success("Match recalculated");
+    });
+  };
+
+  const handleInterviewPrep = async () => {
+    await runAction("interview-prep", async () => {
+      if (!job) return;
+      await api.generateInterviewPrep(job.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.notes(job.id) });
+      toast.success("Interview prep generated", { description: "Check the Notes section." });
     });
   };
 
@@ -964,6 +972,7 @@ export const JobPage: React.FC = () => {
               onCopyJobInfo={() => void handleCopyJobInfo()}
               onRescore={() => void handleRescore()}
               onCheckSponsor={() => void handleCheckSponsor()}
+              onInterviewPrep={() => void handleInterviewPrep()}
             />
           )}
         </div>
@@ -987,6 +996,14 @@ export const JobPage: React.FC = () => {
         }}
         onConfirm={handleDeleteEvent}
       />
+
+      {isSkipModalOpen && job && (
+        <SkipReasonModal
+          jobId={job.id}
+          jobTitle={job.title}
+          onClose={() => setIsSkipModalOpen(false)}
+        />
+      )}
 
       <JobDetailsEditDrawer
         open={isEditDetailsOpen}

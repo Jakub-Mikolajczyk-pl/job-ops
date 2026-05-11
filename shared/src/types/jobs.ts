@@ -195,7 +195,15 @@ export interface Job {
   tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
   sponsorMatchScore: number | null; // 0-100 fuzzy match score with visa sponsors
   sponsorMatchNames: string | null; // JSON array of matched sponsor names (when 100% matches or top match)
+  oeFitnessScore: number | null; // 0-100 OE-suitability score
+  oeFitnessReasons: string | null; // JSON: Array<{ rule, delta, evidence }>
+  redFlags: string | null; // JSON: Array<{ id, severity, snippet }>
+  asyncScore: number | null; // 0-100 async-friendliness score
+  asyncSignals: string | null; // JSON: string[] of matched terms
+  weeklyHoursEstimate: number | null; // Estimated weekly hours commitment
+  weeklyHoursReasons: string | null; // JSON: Array<{ rule, delta }>
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
+  applyRisk?: { level: "low" | "medium" | "high"; reason: string } | null; // Computed on detail response
 
   // JobSpy fields (nullable for non-JobSpy sources)
   jobType: string | null;
@@ -249,6 +257,10 @@ export type JobListItem = Pick<
   | "closedAt"
   | "suitabilityScore"
   | "sponsorMatchScore"
+  | "oeFitnessScore"
+  | "redFlags"
+  | "asyncScore"
+  | "weeklyHoursEstimate"
   | "appliedDuplicateMatch"
   | "jobType"
   | "jobFunction"
@@ -365,6 +377,68 @@ export interface UpdateJobInput {
   appliedAt?: string;
   sponsorMatchScore?: number;
   sponsorMatchNames?: string;
+  skipReason?: string | null;
+  oeFitnessScore?: number | null;
+  oeFitnessReasons?: string | null;
+  redFlags?: string | null;
+  asyncScore?: number | null;
+  asyncSignals?: string | null;
+  weeklyHoursEstimate?: number | null;
+  weeklyHoursReasons?: string | null;
+}
+
+export interface ActiveEmployment {
+  id: string;
+  tenantId: string;
+  jobId: string | null;
+  label: string;
+  employer: string;
+  startedAt: string;
+  endedAt: string | null;
+  timezone: string | null;
+  coreHoursStart: string | null;
+  coreHoursEnd: string | null;
+  monthlyGrossPLN: number | null;
+  hourlyRatePLN: number | null;
+  monthlyHours: number | null;
+  weeklyHoursBudget: number | null;
+  industry: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateActiveEmploymentInput {
+  jobId?: string | null;
+  label: string;
+  employer: string;
+  startedAt: string;
+  endedAt?: string | null;
+  timezone?: string | null;
+  coreHoursStart?: string | null;
+  coreHoursEnd?: string | null;
+  monthlyGrossPLN?: number | null;
+  hourlyRatePLN?: number | null;
+  monthlyHours?: number | null;
+  weeklyHoursBudget?: number | null;
+  industry?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateActiveEmploymentInput {
+  label?: string;
+  employer?: string;
+  startedAt?: string;
+  endedAt?: string | null;
+  timezone?: string | null;
+  coreHoursStart?: string | null;
+  coreHoursEnd?: string | null;
+  monthlyGrossPLN?: number | null;
+  hourlyRatePLN?: number | null;
+  monthlyHours?: number | null;
+  weeklyHoursBudget?: number | null;
+  industry?: string | null;
+  notes?: string | null;
 }
 
 export interface CreateJobNoteInput {

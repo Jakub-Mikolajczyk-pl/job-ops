@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import { activeEmploymentsRouter } from "./routes/active-employments";
 import { authRouter } from "./routes/auth";
 import { backupRouter } from "./routes/backup";
 import { databaseRouter } from "./routes/database";
@@ -17,7 +18,10 @@ import { pipelineRouter } from "./routes/pipeline";
 import { postApplicationProvidersRouter } from "./routes/post-application-providers";
 import { postApplicationReviewRouter } from "./routes/post-application-review";
 import { profileRouter } from "./routes/profile";
+import { savedSearchesRouter } from "./routes/saved-searches";
 import { settingsRouter } from "./routes/settings";
+import { skillExclusionsRouter } from "./routes/skill-exclusions";
+import { skillWatchlistRouter } from "./routes/skill-watchlist";
 import { tracerLinksRouter } from "./routes/tracer-links";
 import { visaSponsorsRouter } from "./routes/visa-sponsors";
 import { webhookRouter } from "./routes/webhook";
@@ -43,4 +47,8 @@ apiRouter.use("/backups", backupRouter);
 apiRouter.use("/tracer-links", tracerLinksRouter);
 apiRouter.use("/workspaces", workspacesRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/saved-searches", savedSearchesRouter);
+apiRouter.use("/skill-exclusions", skillExclusionsRouter);
+apiRouter.use("/skill-watchlist", skillWatchlistRouter);
+apiRouter.use("/active-employments", activeEmploymentsRouter);
 apiRouter.use("/", extractorHealthRouter);
