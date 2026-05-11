@@ -24,14 +24,18 @@ const mocks = vi.hoisted(() => ({
     setActiveRoot: vi.fn(),
     getSiblingsOf: vi.fn(),
     getChildrenOfMessage: vi.fn(),
-    updateThreadSelectedNoteIds: vi.fn(),
+    updateThreadContext: vi.fn(),
   },
   jobsRepo: {
     listJobNotesByIds: vi.fn(),
   },
+  jobEmails: {
+    listJobPostApplicationEmailsByIds: vi.fn(),
+  },
   settings: {
     getAllSettings: vi.fn(),
   },
+  resolveLlmRuntimeSettings: vi.fn(),
 }));
 
 vi.mock("@infra/logger", () => ({
@@ -74,11 +78,20 @@ vi.mock("../repositories/ghostwriter", () => ({
   getSiblingsOf: mocks.repo.getSiblingsOf,
   getChildrenOfMessage: mocks.repo.getChildrenOfMessage,
   setActiveRoot: mocks.repo.setActiveRoot,
-  updateThreadSelectedNoteIds: mocks.repo.updateThreadSelectedNoteIds,
+  updateThreadContext: mocks.repo.updateThreadContext,
 }));
 
 vi.mock("../repositories/jobs", () => ({
   listJobNotesByIds: mocks.jobsRepo.listJobNotesByIds,
+}));
+
+vi.mock("./post-application/job-emails", () => ({
+  listJobPostApplicationEmailsByIds:
+    mocks.jobEmails.listJobPostApplicationEmailsByIds,
+}));
+
+vi.mock("./modelSelection", () => ({
+  resolveLlmRuntimeSettings: mocks.resolveLlmRuntimeSettings,
 }));
 
 vi.mock("./llm/service", () => ({
@@ -104,6 +117,7 @@ const thread = {
   lastMessageAt: null,
   activeRootMessageId: "user-1",
   selectedNoteIds: [],
+  selectedEmailIds: [],
 };
 
 const baseUserMessage: JobChatMessage = {
@@ -119,6 +133,7 @@ const baseUserMessage: JobChatMessage = {
   replacesMessageId: null,
   parentMessageId: null,
   activeChildId: "assistant-1",
+  attachments: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -136,6 +151,7 @@ const baseAssistantMessage: JobChatMessage = {
   replacesMessageId: null,
   parentMessageId: "user-1",
   activeChildId: null,
+  attachments: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -146,6 +162,12 @@ describe("ghostwriter service", () => {
 
     mocks.getRequestId.mockReturnValue("req-123");
     mocks.settings.getAllSettings.mockResolvedValue({});
+    mocks.resolveLlmRuntimeSettings.mockResolvedValue({
+      model: "gpt-4o-mini",
+      provider: "openai",
+      baseUrl: null,
+      apiKey: "test-key",
+    });
     mocks.buildJobChatPromptContext.mockResolvedValue({
       job: { id: "job-1" },
       style: {
@@ -158,12 +180,14 @@ describe("ghostwriter service", () => {
       jobSnapshot: '{"job":"snapshot"}',
       profileSnapshot: "profile snapshot",
       selectedNotesSnapshot: "",
+      selectedEmailsSnapshot: "",
     });
 
     mocks.jobsRepo.listJobNotesByIds.mockResolvedValue([]);
+    mocks.jobEmails.listJobPostApplicationEmailsByIds.mockResolvedValue([]);
     mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);
     mocks.repo.getThreadForJob.mockResolvedValue(thread);
-    mocks.repo.updateThreadSelectedNoteIds.mockResolvedValue(thread);
+    mocks.repo.updateThreadContext.mockResolvedValue(thread);
     mocks.repo.getActiveRunForThread.mockResolvedValue(null);
     mocks.repo.createRun.mockResolvedValue({
       id: "run-1",
@@ -235,6 +259,7 @@ describe("ghostwriter service", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("sends message, runs LLM, and returns user + assistant messages", async () => {
@@ -312,7 +337,7 @@ describe("ghostwriter service", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    mocks.repo.updateThreadSelectedNoteIds.mockResolvedValue(threadWithNotes);
+    mocks.repo.updateThreadContext.mockResolvedValue(threadWithNotes);
     mocks.repo.getThreadForJob
       .mockResolvedValueOnce(thread)
       .mockResolvedValueOnce(threadWithNotes);
@@ -328,6 +353,7 @@ describe("ghostwriter service", () => {
       jobSnapshot: '{"job":"snapshot"}',
       profileSnapshot: "profile snapshot",
       selectedNotesSnapshot: "Selected Job Notes:\nNote 1: Recruiter call",
+      selectedEmailsSnapshot: "",
     });
     mocks.repo.createMessage
       .mockResolvedValueOnce(baseUserMessage)
@@ -344,18 +370,320 @@ describe("ghostwriter service", () => {
     expect(mocks.jobsRepo.listJobNotesByIds).toHaveBeenCalledWith("job-1", [
       "note-1",
     ]);
-    expect(mocks.repo.updateThreadSelectedNoteIds).toHaveBeenCalledWith({
+    expect(mocks.repo.updateThreadContext).toHaveBeenCalledWith({
       jobId: "job-1",
       threadId: "thread-1",
       selectedNoteIds: ["note-1"],
+      selectedEmailIds: undefined,
     });
-    expect(mocks.buildJobChatPromptContext).toHaveBeenCalledWith("job-1", [
-      "note-1",
-    ]);
+    expect(mocks.buildJobChatPromptContext).toHaveBeenCalledWith(
+      "job-1",
+      ["note-1"],
+      [],
+    );
     expect(mocks.llmCallJson.mock.calls[0][0].messages).toContainEqual({
       role: "system",
       content: "Selected Job Notes:\nNote 1: Recruiter call",
     });
+  });
+
+  it("saves selected emails before building prompt context", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-with-emails",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...assistantPartial,
+      content: "Email-aware reply.",
+      status: "complete",
+    };
+    const threadWithEmails = {
+      ...thread,
+      selectedEmailIds: ["email-1"],
+    };
+
+    mocks.jobEmails.listJobPostApplicationEmailsByIds.mockResolvedValue([
+      {
+        message: {
+          id: "email-1",
+          provider: "gmail",
+          accountKey: "default",
+          integrationId: null,
+          syncRunId: null,
+          externalMessageId: "gmail-1",
+          externalThreadId: "thread-ext-1",
+          fromAddress: "recruiter@example.com",
+          fromDomain: "example.com",
+          senderName: "Recruiter",
+          subject: "Interview update",
+          receivedAt: 1_767_225_600_000,
+          snippet: "Can you share your availability?",
+          classificationLabel: null,
+          classificationConfidence: null,
+          classificationPayload: null,
+          relevanceLlmScore: null,
+          relevanceDecision: "relevant",
+          matchedJobId: "job-1",
+          matchConfidence: 91,
+          stageTarget: "recruiter_screen",
+          messageType: "interview",
+          stageEventPayload: null,
+          processingStatus: "auto_linked",
+          decidedAt: null,
+          decidedBy: null,
+          errorCode: null,
+          errorMessage: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        accountDisplayName: "Work Gmail",
+        sourceUrl: "https://mail.google.com/mail/u/0/#all/thread-ext-1",
+      },
+    ]);
+    mocks.repo.updateThreadContext.mockResolvedValue(threadWithEmails);
+    mocks.repo.getThreadForJob
+      .mockResolvedValueOnce(thread)
+      .mockResolvedValueOnce(threadWithEmails);
+    mocks.buildJobChatPromptContext.mockResolvedValue({
+      job: { id: "job-1" },
+      style: {
+        tone: "professional",
+        formality: "medium",
+        constraints: "",
+        doNotUse: "",
+      },
+      systemPrompt: "system prompt",
+      jobSnapshot: '{"job":"snapshot"}',
+      profileSnapshot: "profile snapshot",
+      selectedNotesSnapshot: "",
+      selectedEmailsSnapshot: "Selected Job Emails:\nEmail 1: Interview update",
+    });
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockResolvedValue(assistantComplete);
+    mocks.repo.getMessageById.mockResolvedValue(assistantComplete);
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "Use the email",
+      selectedEmailIds: ["email-1"],
+    });
+
+    expect(
+      mocks.jobEmails.listJobPostApplicationEmailsByIds,
+    ).toHaveBeenCalledWith("job-1", ["email-1"]);
+    expect(mocks.repo.updateThreadContext).toHaveBeenCalledWith({
+      jobId: "job-1",
+      threadId: "thread-1",
+      selectedNoteIds: undefined,
+      selectedEmailIds: ["email-1"],
+    });
+    expect(mocks.buildJobChatPromptContext).toHaveBeenCalledWith(
+      "job-1",
+      [],
+      ["email-1"],
+    );
+    expect(mocks.llmCallJson.mock.calls[0][0].messages).toContainEqual({
+      role: "system",
+      content: "Selected Job Emails:\nEmail 1: Interview update",
+    });
+  });
+
+  it("passes screenshot attachments as image input when the model supports them", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-with-image",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...assistantPartial,
+      content: "I can see the screenshot.",
+      status: "complete",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockResolvedValue(assistantComplete);
+    mocks.repo.getMessageById.mockResolvedValue(assistantComplete);
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "Help with this form",
+      attachments: [
+        {
+          name: "form.png",
+          mediaType: "image/png",
+          dataUrl: "data:image/png;base64,aGVsbG8=",
+        },
+      ],
+    });
+
+    expect(mocks.repo.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "user",
+        attachments: [
+          {
+            name: "form.png",
+            mediaType: "image/png",
+            dataUrl: "data:image/png;base64,aGVsbG8=",
+          },
+        ],
+      }),
+    );
+
+    const userMessage = mocks.llmCallJson.mock.calls[0][0].messages.at(-1);
+    expect(userMessage.role).toBe("user");
+    expect(userMessage.content).toEqual([
+      {
+        type: "text",
+        text: expect.stringContaining("Help with this form"),
+      },
+      {
+        type: "image",
+        imageUrl: "data:image/png;base64,aGVsbG8=",
+        mediaType: "image/png",
+        name: "form.png",
+      },
+    ]);
+  });
+
+  it("rejects screenshots before running when the selected model is text-only", async () => {
+    mocks.resolveLlmRuntimeSettings.mockResolvedValue({
+      model: "text-embedding-3-small",
+      provider: "openai",
+      baseUrl: null,
+      apiKey: "test-key",
+    });
+
+    await expect(
+      sendMessageForJob({
+        jobId: "job-1",
+        content: "Read this screenshot",
+        attachments: [
+          {
+            name: "screen.png",
+            mediaType: "image/png",
+            dataUrl: "data:image/png;base64,aGVsbG8=",
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      status: 400,
+    });
+
+    expect(mocks.llmCallJson).not.toHaveBeenCalled();
+    expect(mocks.repo.createMessage).not.toHaveBeenCalled();
+  });
+
+  it("checks OpenRouter model metadata for screenshot support", async () => {
+    mocks.resolveLlmRuntimeSettings.mockResolvedValue({
+      model: "example/text-only",
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai",
+      apiKey: "test-key",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              id: "example/text-only",
+              architecture: { input_modalities: ["text"] },
+            },
+          ],
+        }),
+      })),
+    );
+
+    await expect(
+      sendMessageForJob({
+        jobId: "job-1",
+        content: "Read this screenshot",
+        attachments: [
+          {
+            name: "screen.png",
+            mediaType: "image/png",
+            dataUrl: "data:image/png;base64,aGVsbG8=",
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      status: 400,
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer test-key" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(mocks.repo.createMessage).not.toHaveBeenCalled();
+  });
+
+  it("caches OpenRouter image capability lookups", async () => {
+    mocks.resolveLlmRuntimeSettings.mockResolvedValue({
+      model: "example/vision",
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai",
+      apiKey: "test-key",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "example/vision",
+            architecture: { input_modalities: ["text", "image"] },
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-vision",
+      content: "",
+      status: "partial",
+    };
+    mocks.repo.createMessage.mockResolvedValue(assistantPartial);
+    mocks.repo.updateMessage.mockResolvedValue({
+      ...assistantPartial,
+      content: "ok",
+      status: "complete",
+    });
+    mocks.repo.getMessageById.mockResolvedValue({
+      ...assistantPartial,
+      content: "ok",
+      status: "complete",
+    });
+
+    const input = {
+      jobId: "job-1",
+      content: "Read this screenshot",
+      attachments: [
+        {
+          name: "screen.png",
+          mediaType: "image/png" as const,
+          dataUrl: "data:image/png;base64,aGVsbG8=",
+        },
+      ],
+    };
+
+    await sendMessageForJob(input);
+    await sendMessageForJob(input);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects too many selected notes", async () => {
@@ -366,6 +694,22 @@ describe("ghostwriter service", () => {
         selectedNoteIds: Array.from(
           { length: 9 },
           (_, index) => `note-${index}`,
+        ),
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      status: 400,
+    });
+  });
+
+  it("rejects too many selected emails", async () => {
+    await expect(
+      sendMessageForJob({
+        jobId: "job-1",
+        content: "Use these",
+        selectedEmailIds: Array.from(
+          { length: 9 },
+          (_, index) => `email-${index}`,
         ),
       }),
     ).rejects.toMatchObject({

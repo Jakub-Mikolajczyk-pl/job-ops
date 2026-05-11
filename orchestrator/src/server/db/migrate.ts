@@ -66,6 +66,7 @@ const pipelineRunsHasConfigSnapshot = tableHasColumn(
 );
 const pipelineRunsHasTenantId = tableHasColumn("pipeline_runs", "tenant_id");
 const jobsHasPdfRegenerating = tableHasColumn("jobs", "pdf_regenerating");
+const jobsHasJobBrief = tableHasColumn("jobs", "job_brief");
 
 const migrations = [
 	`CREATE TABLE IF NOT EXISTS tenants (
@@ -152,6 +153,7 @@ const migrations = [
     closed_at INTEGER,
     suitability_score REAL,
     suitability_reason TEXT,
+    job_brief TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
     tailored_skills TEXT,
@@ -297,6 +299,7 @@ const migrations = [
     last_message_at TEXT,
     active_root_message_id TEXT,
     selected_note_ids TEXT NOT NULL DEFAULT '[]',
+    selected_email_ids TEXT NOT NULL DEFAULT '[]',
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
@@ -315,6 +318,7 @@ const migrations = [
     replaces_message_id TEXT,
     parent_message_id TEXT,
     active_child_id TEXT,
+    attachments TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -569,6 +573,7 @@ const migrations = [
 	// Add sponsor match columns for visa sponsor matching feature
 	`ALTER TABLE jobs ADD COLUMN sponsor_match_score REAL`,
 	`ALTER TABLE jobs ADD COLUMN sponsor_match_names TEXT`,
+	`ALTER TABLE jobs ADD COLUMN job_brief TEXT`,
 
 	// Add application tracking columns
 	`ALTER TABLE jobs ADD COLUMN outcome TEXT`,
@@ -686,6 +691,7 @@ const migrations = [
     closed_at INTEGER,
     suitability_score REAL,
     suitability_reason TEXT,
+    job_brief TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
     tailored_skills TEXT,
@@ -713,7 +719,7 @@ const migrations = [
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, location_evidence, degree_required, starting, job_description, status, outcome, closed_at,
-    suitability_score, suitability_reason, tailored_summary, tailored_headline, tailored_skills,
+    suitability_score, suitability_reason, job_brief, tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, pdf_source, pdf_regenerating, pdf_fingerprint, pdf_generated_at, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     ready_at,
     applied_at, created_at, updated_at
@@ -725,7 +731,7 @@ const migrations = [
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, location_evidence, degree_required, starting, job_description, status, outcome, closed_at,
-    suitability_score, suitability_reason, tailored_summary, tailored_headline, tailored_skills,
+    suitability_score, suitability_reason, ${jobsHasJobBrief ? "job_brief" : "NULL"}, tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, pdf_source, ${jobsHasPdfRegenerating ? "pdf_regenerating" : "0"}, pdf_fingerprint, pdf_generated_at, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     ready_at,
     applied_at, created_at, updated_at
@@ -846,8 +852,10 @@ const migrations = [
 	// Branching conversations: add parent_message_id and active_child_id to job_chat_messages
 	`ALTER TABLE job_chat_messages ADD COLUMN parent_message_id TEXT`,
 	`ALTER TABLE job_chat_messages ADD COLUMN active_child_id TEXT`,
+	`ALTER TABLE job_chat_messages ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]'`,
 	`ALTER TABLE job_chat_threads ADD COLUMN active_root_message_id TEXT`,
 	`ALTER TABLE job_chat_threads ADD COLUMN selected_note_ids TEXT NOT NULL DEFAULT '[]'`,
+	`ALTER TABLE job_chat_threads ADD COLUMN selected_email_ids TEXT NOT NULL DEFAULT '[]'`,
 	`ALTER TABLE pipeline_runs ADD COLUMN config_snapshot TEXT`,
 	`ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_version INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE analytics_install_state ADD COLUMN raw_event_replay_completed_at TEXT`,
@@ -1137,6 +1145,66 @@ function rebuildSettingsTable(): void {
 	sqlite.exec("ALTER TABLE settings_new RENAME TO settings");
 }
 
+function ensureTracerLinksUniqueIndex(): void {
+  if (!tableExists("tracer_links")) return;
+
+  for (const columnName of [
+    "tenant_id",
+    "job_id",
+    "source_path",
+    "destination_url_hash",
+  ]) {
+    if (!tableHasColumn("tracer_links", columnName)) return;
+  }
+
+  if (tableExists("tracer_click_events")) {
+    sqlite.exec(`
+      WITH duplicate_links AS (
+        SELECT
+          id,
+          first_value(id) OVER (
+            PARTITION BY tenant_id, job_id, source_path, destination_url_hash
+            ORDER BY created_at ASC, id ASC
+          ) AS keep_id
+        FROM tracer_links
+      )
+      UPDATE tracer_click_events
+      SET tracer_link_id = (
+        SELECT keep_id
+        FROM duplicate_links
+        WHERE duplicate_links.id = tracer_click_events.tracer_link_id
+      )
+      WHERE tracer_link_id IN (
+        SELECT id
+        FROM duplicate_links
+        WHERE id <> keep_id
+      )
+    `);
+  }
+
+  sqlite.exec(`
+    WITH duplicate_links AS (
+      SELECT
+        id,
+        first_value(id) OVER (
+          PARTITION BY tenant_id, job_id, source_path, destination_url_hash
+          ORDER BY created_at ASC, id ASC
+        ) AS keep_id
+      FROM tracer_links
+    )
+    DELETE FROM tracer_links
+    WHERE id IN (
+      SELECT id
+      FROM duplicate_links
+      WHERE id <> keep_id
+    )
+  `);
+
+  sqlite.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracer_links_tenant_job_source_destination_unique ON tracer_links(tenant_id, job_id, source_path, destination_url_hash)",
+  );
+}
+
 function seedLegacyOwnerFromBasicAuth(): void {
 	const existing = sqlite
 		.prepare("SELECT count(*) AS count FROM users")
@@ -1181,6 +1249,7 @@ function seedLegacyOwnerFromBasicAuth(): void {
 console.log("🔐 Applying tenancy compatibility migrations...");
 ensureTenantColumns();
 rebuildSettingsTable();
+ensureTracerLinksUniqueIndex();
 sqlite.exec(
 	"CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_tenant_key_unique ON settings(tenant_id, key)",
 );

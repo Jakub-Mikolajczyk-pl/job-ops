@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { normalizeGhostwriterSelectedEmailIds } from "@shared/ghostwriter-email-context.js";
 import { normalizeGhostwriterSelectedNoteIds } from "@shared/ghostwriter-note-context.js";
 import type {
+  JobChatImageAttachment,
   JobChatMessage,
   JobChatMessageRole,
   JobChatMessageStatus,
@@ -14,14 +16,62 @@ import { getActiveTenantId } from "../tenancy/context";
 
 const { jobChatMessages, jobChatRuns, jobChatThreads } = schema;
 
-function parseSelectedNoteIds(value: string | null): string[] {
+function parseSelectedContextIds(
+  value: string | null,
+  normalize: (selectedIds: readonly string[]) => string[],
+): string[] {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return normalizeGhostwriterSelectedNoteIds(
+    return normalize(
       parsed.filter((item): item is string => typeof item === "string"),
     );
+  } catch {
+    return [];
+  }
+}
+
+function parseSelectedNoteIds(value: string | null): string[] {
+  return parseSelectedContextIds(value, normalizeGhostwriterSelectedNoteIds);
+}
+
+function parseSelectedEmailIds(value: string | null): string[] {
+  return parseSelectedContextIds(value, normalizeGhostwriterSelectedEmailIds);
+}
+
+function parseImageAttachments(value: string | null): JobChatImageAttachment[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const attachments: JobChatImageAttachment[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      const mediaType = record.mediaType;
+      const dataUrl = record.dataUrl;
+      if (
+        mediaType !== "image/png" &&
+        mediaType !== "image/jpeg" &&
+        mediaType !== "image/webp"
+      ) {
+        continue;
+      }
+      if (
+        typeof dataUrl !== "string" ||
+        !dataUrl.startsWith(`data:${mediaType};base64,`)
+      ) {
+        continue;
+      }
+      attachments.push({
+        ...(typeof record.id === "string" ? { id: record.id } : {}),
+        name: typeof record.name === "string" ? record.name : "Screenshot",
+        mediaType,
+        dataUrl,
+      });
+    }
+    return attachments;
   } catch {
     return [];
   }
@@ -37,6 +87,7 @@ function mapThread(row: typeof jobChatThreads.$inferSelect): JobChatThread {
     lastMessageAt: row.lastMessageAt,
     activeRootMessageId: row.activeRootMessageId,
     selectedNoteIds: parseSelectedNoteIds(row.selectedNoteIds),
+    selectedEmailIds: parseSelectedEmailIds(row.selectedEmailIds),
   };
 }
 
@@ -54,6 +105,7 @@ function mapMessage(row: typeof jobChatMessages.$inferSelect): JobChatMessage {
     replacesMessageId: row.replacesMessageId,
     parentMessageId: row.parentMessageId,
     activeChildId: row.activeChildId,
+    attachments: parseImageAttachments(row.attachments),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -160,6 +212,7 @@ export async function createThread(input: {
     updatedAt: now,
     lastMessageAt: null,
     selectedNoteIds: "[]",
+    selectedEmailIds: "[]",
   });
 
   const thread = await getThreadById(id);
@@ -183,6 +236,45 @@ export async function updateThreadSelectedNoteIds(input: {
       selectedNoteIds: JSON.stringify(
         normalizeGhostwriterSelectedNoteIds(input.selectedNoteIds),
       ),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(jobChatThreads.tenantId, tenantId),
+        eq(jobChatThreads.id, input.threadId),
+        eq(jobChatThreads.jobId, input.jobId),
+      ),
+    );
+
+  return getThreadForJob(input.jobId, input.threadId);
+}
+
+export async function updateThreadContext(input: {
+  jobId: string;
+  threadId: string;
+  selectedNoteIds?: string[];
+  selectedEmailIds?: string[];
+}): Promise<JobChatThread | null> {
+  const now = new Date().toISOString();
+  const tenantId = getActiveTenantId();
+
+  await db
+    .update(jobChatThreads)
+    .set({
+      ...(input.selectedNoteIds !== undefined
+        ? {
+            selectedNoteIds: JSON.stringify(
+              normalizeGhostwriterSelectedNoteIds(input.selectedNoteIds),
+            ),
+          }
+        : {}),
+      ...(input.selectedEmailIds !== undefined
+        ? {
+            selectedEmailIds: JSON.stringify(
+              normalizeGhostwriterSelectedEmailIds(input.selectedEmailIds),
+            ),
+          }
+        : {}),
       updatedAt: now,
     })
     .where(
@@ -267,6 +359,7 @@ export async function createMessage(input: {
   version?: number;
   replacesMessageId?: string | null;
   parentMessageId?: string | null;
+  attachments?: readonly JobChatImageAttachment[];
 }): Promise<JobChatMessage> {
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -285,6 +378,7 @@ export async function createMessage(input: {
     version: input.version ?? 1,
     replacesMessageId: input.replacesMessageId ?? null,
     parentMessageId: input.parentMessageId ?? null,
+    attachments: JSON.stringify(input.attachments ?? []),
     createdAt: now,
     updatedAt: now,
   });

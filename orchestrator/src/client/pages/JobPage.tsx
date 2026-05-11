@@ -31,7 +31,8 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { toast } from "sonner";
-import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdown";
+import { JobBriefPane } from "@/client/components/JobBriefPane";
+import { JobDescriptionPanel } from "@/client/components/JobDescriptionPanel";
 import { invalidateJobData } from "@/client/hooks/queries/invalidate";
 import {
   useCheckSponsorMutation,
@@ -480,6 +481,18 @@ export const JobPage: React.FC = () => {
     }
   };
 
+  const handleSaveJobDescription = React.useCallback(
+    async (jobDescription: string) => {
+      if (!job) return;
+      await updateJobMutation.mutateAsync({
+        id: job.id,
+        update: { jobDescription },
+      });
+      await loadData();
+    },
+    [job, loadData, updateJobMutation],
+  );
+
   const handleUploadPdf = async (file: File) => {
     if (!job) return;
 
@@ -594,6 +607,8 @@ export const JobPage: React.FC = () => {
                   hasNotes={notes.length > 0}
                   navigationState={jobPageNavigationState}
                 />
+
+                <JobBriefPane job={job} />
 
                 <div className="grid gap-4 lg:grid-cols-2">
                   <article className="rounded-xl border border-border/50 bg-card/75 p-4">
@@ -832,26 +847,13 @@ export const JobPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-border/60 bg-background/25">
-                    <div className="border-b border-border/50 px-4 py-3">
-                      <div className="text-sm font-semibold">
-                        Job description
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      {job.jobDescription ? (
-                        <JobDescriptionMarkdown
-                          description={getRenderableJobDescription(
-                            job.jobDescription,
-                          )}
-                        />
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          No job description stored.
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <JobBriefPane job={job} />
+
+                  <JobDescriptionPanel
+                    description={job.jobDescription}
+                    jobUrl={job.jobUrl}
+                    onSave={handleSaveJobDescription}
+                  />
                 </div>
               </section>
             )}

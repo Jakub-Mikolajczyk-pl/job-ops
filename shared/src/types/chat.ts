@@ -31,6 +31,7 @@ export interface JobChatThread {
   lastMessageAt: string | null;
   activeRootMessageId: string | null;
   selectedNoteIds: string[];
+  selectedEmailIds: string[];
 }
 
 export interface JobChatMessage {
@@ -46,6 +47,7 @@ export interface JobChatMessage {
   replacesMessageId: string | null;
   parentMessageId: string | null;
   activeChildId: string | null;
+  attachments: JobChatImageAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +75,13 @@ export interface JobChatRun {
   requestId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface JobChatImageAttachment {
+  id?: string;
+  name: string;
+  mediaType: "image/png" | "image/jpeg" | "image/webp";
+  dataUrl: string;
 }
 
 export type JobChatStreamEvent =

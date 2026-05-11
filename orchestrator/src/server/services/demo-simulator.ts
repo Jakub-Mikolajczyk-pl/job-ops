@@ -4,6 +4,7 @@ import { buildPipelineRunSavedDetails } from "@server/pipeline/run-details";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as pipelineRepo from "@server/repositories/pipeline";
 import { transitionStage } from "@server/services/applicationTracking";
+import { persistDemoGeneratedPdf } from "@server/services/demo-pdf";
 import type {
   Job,
   JobSource,
@@ -13,6 +14,7 @@ import type {
 
 type ProcessOptions = {
   force?: boolean;
+  fields?: Array<"summary" | "headline" | "skills">;
 };
 
 function scoreFromJob(job: Job): number {
@@ -37,9 +39,13 @@ function ensureProjectIds(job: Job): string {
   return "demo-project-1,demo-project-2";
 }
 
-function samplePdfPath(job: Job): string {
-  const safeId = job.id.replace(/[^a-zA-Z0-9-_]/g, "");
-  return `/pdfs/demo-${safeId || "sample"}.pdf`;
+function makeDemoTailoredSkills(): string {
+  return JSON.stringify([
+    {
+      name: "Core Skills",
+      keywords: ["TypeScript", "System Design", "Communication"],
+    },
+  ]);
 }
 
 async function ensureJob(jobId: string): Promise<Job> {
@@ -110,18 +116,22 @@ export async function simulatePipelineRun(
 
 export async function simulateSummarizeJob(
   jobId: string,
-  _options?: ProcessOptions,
+  options?: ProcessOptions,
 ): Promise<{ success: boolean; error?: string }> {
   const job = await ensureJob(jobId);
+  const requestedFields = options?.fields;
+  const updateAll = !requestedFields?.length;
   await jobsRepo.updateJob(job.id, {
-    tailoredSummary: makeDemoSummary(job),
-    tailoredHeadline: `Demo Tailored Resume - ${job.title}`,
-    tailoredSkills: JSON.stringify([
-      "TypeScript",
-      "System Design",
-      "Communication",
-    ]),
-    selectedProjectIds: ensureProjectIds(job),
+    ...(updateAll || requestedFields.includes("summary")
+      ? { tailoredSummary: makeDemoSummary(job) }
+      : {}),
+    ...(updateAll || requestedFields.includes("headline")
+      ? { tailoredHeadline: `Demo Tailored Resume - ${job.title}` }
+      : {}),
+    ...(updateAll || requestedFields.includes("skills")
+      ? { tailoredSkills: makeDemoTailoredSkills() }
+      : {}),
+    ...(updateAll ? { selectedProjectIds: ensureProjectIds(job) } : {}),
   });
   return { success: true };
 }
@@ -129,15 +139,17 @@ export async function simulateSummarizeJob(
 export async function simulateGeneratePdf(
   jobId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const job = await ensureJob(jobId);
-  await jobsRepo.updateJob(job.id, {
-    status: "ready",
-    pdfPath: samplePdfPath(job),
-    pdfSource: "generated",
-    pdfFingerprint: null,
-    pdfGeneratedAt: new Date().toISOString(),
-  });
-  return { success: true };
+  try {
+    const job = await ensureJob(jobId);
+    await persistDemoGeneratedPdf(job);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to generate demo PDF",
+    };
+  }
 }
 
 export async function simulateProcessJob(

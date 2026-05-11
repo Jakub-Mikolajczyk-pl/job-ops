@@ -8,16 +8,26 @@ import {
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
 import {
+  GHOSTWRITER_EMAIL_CONTEXT_MAX_SELECTED,
+  normalizeGhostwriterSelectedEmailIds,
+} from "@shared/ghostwriter-email-context.js";
+import {
   GHOSTWRITER_NOTE_CONTEXT_MAX_SELECTED,
   normalizeGhostwriterSelectedNoteIds,
 } from "@shared/ghostwriter-note-context.js";
-import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
+import type {
+  BranchInfo,
+  JobChatImageAttachment,
+  JobChatMessage,
+  JobChatRun,
+} from "@shared/types";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
+import { listJobPostApplicationEmailsByIds } from "./post-application/job-emails";
 
 type LlmRuntimeSettings = {
   model: string;
@@ -27,6 +37,12 @@ type LlmRuntimeSettings = {
 };
 
 const abortControllers = new Map<string, AbortController>();
+const OPENROUTER_CAPABILITY_TIMEOUT_MS = 2500;
+const OPENROUTER_CAPABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const openRouterImageCapabilityCache = new Map<
+  string,
+  { reason: string | null | undefined; expiresAt: number }
+>();
 
 const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   name: "job_chat_response",
@@ -97,6 +113,8 @@ type GenerateReplyOptions = {
   jobId: string;
   threadId: string;
   prompt: string;
+  attachments?: readonly JobChatImageAttachment[];
+  llmConfig?: LlmRuntimeSettings;
   replaceMessageId?: string;
   version?: number;
   /** Parent message ID for the assistant reply (i.e. the user message that triggered it). */
@@ -130,6 +148,196 @@ type GenerateReplyOptions = {
   };
 };
 
+function resolveOpenRouterModelsUrl(baseUrl: string | null): string {
+  const normalized = (baseUrl || "https://openrouter.ai").replace(/\/+$/, "");
+  if (normalized.endsWith("/api/v1")) return `${normalized}/models`;
+  return `${normalized}/api/v1/models`;
+}
+
+function buildOpenRouterCapabilityCacheKey(input: LlmRuntimeSettings): string {
+  return [
+    "openrouter",
+    input.baseUrl || "https://openrouter.ai",
+    input.model.trim().toLowerCase(),
+  ].join(":");
+}
+
+async function getOpenRouterImageCapabilityReason(
+  input: LlmRuntimeSettings,
+): Promise<string | null | undefined> {
+  const cacheKey = buildOpenRouterCapabilityCacheKey(input);
+  const cached = openRouterImageCapabilityCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.reason;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    OPENROUTER_CAPABILITY_TIMEOUT_MS,
+  );
+
+  try {
+    const headers: Record<string, string> = {};
+    if (input.apiKey) headers.Authorization = `Bearer ${input.apiKey}`;
+    const response = await fetch(resolveOpenRouterModelsUrl(input.baseUrl), {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) return undefined;
+
+    const payload = (await response.json()) as {
+      data?: Array<{
+        id?: unknown;
+        architecture?: { input_modalities?: unknown };
+      }>;
+    };
+    const model = input.model.trim().toLowerCase();
+    const match = payload.data?.find((candidate) => {
+      const id = typeof candidate.id === "string" ? candidate.id : "";
+      return id.toLowerCase() === model;
+    });
+    if (!match) {
+      openRouterImageCapabilityCache.set(cacheKey, {
+        reason: undefined,
+        expiresAt: Date.now() + OPENROUTER_CAPABILITY_CACHE_TTL_MS,
+      });
+      return undefined;
+    }
+
+    const modalities = match.architecture?.input_modalities;
+    if (!Array.isArray(modalities)) return undefined;
+    const reason = modalities.some(
+      (modality) => typeof modality === "string" && modality === "image",
+    )
+      ? null
+      : `The selected OpenRouter model (${input.model}) does not accept image input.`;
+    openRouterImageCapabilityCache.set(cacheKey, {
+      reason,
+      expiresAt: Date.now() + OPENROUTER_CAPABILITY_CACHE_TTL_MS,
+    });
+    return reason;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function imageInputCapabilityReason(
+  input: LlmRuntimeSettings,
+): Promise<string | null> {
+  const provider = (input.provider || "openrouter").toLowerCase();
+  const model = input.model.trim().toLowerCase();
+  if (!model) return "No AI model is configured.";
+
+  const blockedModelPatterns = [
+    "embedding",
+    "audio",
+    "moderation",
+    "tts",
+    "whisper",
+    "dall-e",
+    "image-generation",
+    "codex",
+  ];
+  if (blockedModelPatterns.some((pattern) => model.includes(pattern))) {
+    return `The selected model (${input.model}) does not accept image input.`;
+  }
+
+  if (provider === "openai") {
+    const supported = [
+      /^gpt-4o\b/,
+      /^gpt-4\.1\b/,
+      /^gpt-4\.5\b/,
+      /^gpt-5\b/,
+      /^chatgpt-4o\b/,
+      /^o3\b/,
+      /^o4\b/,
+    ].some((pattern) => pattern.test(model));
+    return supported
+      ? null
+      : `The selected OpenAI model (${input.model}) is not recognized as image-capable.`;
+  }
+
+  if (provider === "gemini" || provider === "gemini_cli") {
+    return /^google\/gemini|^gemini|^models\/gemini/.test(model)
+      ? null
+      : `The selected Gemini model (${input.model}) is not recognized as image-capable.`;
+  }
+
+  if (provider === "openrouter" || provider === "openai_compatible") {
+    if (provider === "openrouter") {
+      const metadataReason = await getOpenRouterImageCapabilityReason(input);
+      if (metadataReason !== undefined) return metadataReason;
+    }
+
+    const supportedSignals = [
+      "vision",
+      "-vl",
+      "/vl",
+      "qwen2-vl",
+      "qwen2.5-vl",
+      "llava",
+      "pixtral",
+      "gemini",
+      "gpt-4o",
+      "gpt-4.1",
+      "gpt-4.5",
+      "gpt-5",
+      "claude-3",
+      "claude-sonnet-4",
+      "claude-opus-4",
+      "mistral-medium-3",
+    ];
+    return supportedSignals.some((signal) => model.includes(signal))
+      ? null
+      : `The selected model (${input.model}) is not recognized as image-capable.`;
+  }
+
+  return `Screenshot context is not available for the current AI provider (${input.provider || "openrouter"}).`;
+}
+
+function buildUserPromptContent(
+  prompt: string,
+  attachments: readonly JobChatImageAttachment[] | undefined,
+) {
+  if (!attachments?.length) return prompt;
+  return [
+    {
+      type: "text" as const,
+      text: [
+        prompt,
+        "",
+        `The user attached ${attachments.length} screenshot${attachments.length === 1 ? "" : "s"} for visual context. Inspect the image content directly and use it only where relevant.`,
+      ].join("\n"),
+    },
+    ...attachments.map((attachment) => ({
+      type: "image" as const,
+      imageUrl: attachment.dataUrl,
+      mediaType: attachment.mediaType,
+      name: attachment.name,
+    })),
+  ];
+}
+
+async function resolveAndValidateImageInput(
+  attachments: readonly JobChatImageAttachment[] | undefined,
+): Promise<LlmRuntimeSettings | undefined> {
+  if (!attachments?.length) return undefined;
+
+  const llmConfig = await resolveLlmRuntimeSettings();
+  const capabilityReason = await imageInputCapabilityReason(llmConfig);
+  if (capabilityReason) {
+    throw badRequest(capabilityReason, {
+      provider: llmConfig.provider || "openrouter",
+      model: llmConfig.model,
+    });
+  }
+  return llmConfig;
+}
+
 async function ensureJobThread(jobId: string) {
   return jobChatRepo.getOrCreateThreadForJob({
     jobId,
@@ -137,53 +345,101 @@ async function ensureJobThread(jobId: string) {
   });
 }
 
-async function validateSelectedNoteIdsForJob(
-  jobId: string,
-  selectedNoteIds: readonly string[],
-): Promise<string[]> {
-  const normalizedNoteIds =
-    normalizeGhostwriterSelectedNoteIds(selectedNoteIds);
+async function validateSelectedContextIdsForJob<TItem>(input: {
+  selectedIds: readonly string[];
+  maxSelected: number;
+  contextLabel: string;
+  maxSelectedDetailsKey: string;
+  invalidIdsDetailsKey: string;
+  normalize: (selectedIds: readonly string[]) => string[];
+  listItems: (normalizedIds: string[]) => Promise<TItem[]>;
+  getId: (item: TItem) => string;
+}): Promise<string[]> {
+  const normalizedIds = input.normalize(input.selectedIds);
 
-  if (normalizedNoteIds.length > GHOSTWRITER_NOTE_CONTEXT_MAX_SELECTED) {
+  if (normalizedIds.length > input.maxSelected) {
     throw badRequest(
-      `Select up to ${GHOSTWRITER_NOTE_CONTEXT_MAX_SELECTED} notes for Ghostwriter context`,
+      `Select up to ${input.maxSelected} ${input.contextLabel}s for Ghostwriter context`,
       {
-        maxSelectedNotes: GHOSTWRITER_NOTE_CONTEXT_MAX_SELECTED,
-        selectedCount: normalizedNoteIds.length,
+        [input.maxSelectedDetailsKey]: input.maxSelected,
+        selectedCount: normalizedIds.length,
       },
     );
   }
 
-  if (normalizedNoteIds.length === 0) return [];
+  if (normalizedIds.length === 0) return [];
 
-  const notes = await jobsRepo.listJobNotesByIds(jobId, normalizedNoteIds);
-  const noteIdsForJob = new Set(notes.map((note) => note.id));
-  const invalidNoteIds = normalizedNoteIds.filter(
-    (noteId) => !noteIdsForJob.has(noteId),
+  const items = await input.listItems(normalizedIds);
+  const itemIdsForJob = new Set(items.map(input.getId));
+  const invalidIds = normalizedIds.filter(
+    (selectedId) => !itemIdsForJob.has(selectedId),
   );
 
-  if (invalidNoteIds.length > 0) {
-    throw badRequest("Selected notes must belong to this job", {
-      invalidNoteIds,
-    });
+  if (invalidIds.length > 0) {
+    throw badRequest(
+      `Selected ${input.contextLabel}s must belong to this job`,
+      {
+        [input.invalidIdsDetailsKey]: invalidIds,
+      },
+    );
   }
 
-  return normalizedNoteIds;
+  return normalizedIds;
 }
 
-async function updateThreadSelectedNoteIds(input: {
+async function validateSelectedNoteIdsForJob(
+  jobId: string,
+  selectedNoteIds: readonly string[],
+): Promise<string[]> {
+  return validateSelectedContextIdsForJob({
+    selectedIds: selectedNoteIds,
+    maxSelected: GHOSTWRITER_NOTE_CONTEXT_MAX_SELECTED,
+    contextLabel: "note",
+    maxSelectedDetailsKey: "maxSelectedNotes",
+    invalidIdsDetailsKey: "invalidNoteIds",
+    normalize: normalizeGhostwriterSelectedNoteIds,
+    listItems: (normalizedNoteIds) =>
+      jobsRepo.listJobNotesByIds(jobId, normalizedNoteIds),
+    getId: (note) => note.id,
+  });
+}
+
+async function validateSelectedEmailIdsForJob(
+  jobId: string,
+  selectedEmailIds: readonly string[],
+): Promise<string[]> {
+  return validateSelectedContextIdsForJob({
+    selectedIds: selectedEmailIds,
+    maxSelected: GHOSTWRITER_EMAIL_CONTEXT_MAX_SELECTED,
+    contextLabel: "email",
+    maxSelectedDetailsKey: "maxSelectedEmails",
+    invalidIdsDetailsKey: "invalidEmailIds",
+    normalize: normalizeGhostwriterSelectedEmailIds,
+    listItems: (normalizedEmailIds) =>
+      listJobPostApplicationEmailsByIds(jobId, normalizedEmailIds),
+    getId: (email) => email.message.id,
+  });
+}
+
+async function updateThreadContext(input: {
   jobId: string;
   threadId: string;
-  selectedNoteIds: readonly string[];
+  selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
 }) {
-  const selectedNoteIds = await validateSelectedNoteIdsForJob(
-    input.jobId,
-    input.selectedNoteIds,
-  );
-  const thread = await jobChatRepo.updateThreadSelectedNoteIds({
+  const [selectedNoteIds, selectedEmailIds] = await Promise.all([
+    input.selectedNoteIds === undefined
+      ? Promise.resolve(undefined)
+      : validateSelectedNoteIdsForJob(input.jobId, input.selectedNoteIds),
+    input.selectedEmailIds === undefined
+      ? Promise.resolve(undefined)
+      : validateSelectedEmailIdsForJob(input.jobId, input.selectedEmailIds),
+  ]);
+  const thread = await jobChatRepo.updateThreadContext({
     jobId: input.jobId,
     threadId: input.threadId,
     selectedNoteIds,
+    selectedEmailIds,
   });
 
   if (!thread) {
@@ -207,17 +463,20 @@ export async function listThreads(jobId: string) {
 
 export async function updateContextForJob(input: {
   jobId: string;
-  selectedNoteIds: readonly string[];
+  selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
 }) {
   const thread = await ensureJobThread(input.jobId);
-  const updatedThread = await updateThreadSelectedNoteIds({
+  const updatedThread = await updateThreadContext({
     jobId: input.jobId,
     threadId: thread.id,
     selectedNoteIds: input.selectedNoteIds,
+    selectedEmailIds: input.selectedEmailIds,
   });
 
   return {
     selectedNoteIds: updatedThread.selectedNoteIds,
+    selectedEmailIds: updatedThread.selectedEmailIds,
   };
 }
 
@@ -264,11 +523,17 @@ export async function listMessagesForJob(input: {
   messages: JobChatMessage[];
   branches: BranchInfo[];
   selectedNoteIds: string[];
+  selectedEmailIds: string[];
 }> {
   const thread = await ensureJobThread(input.jobId);
   const messages = await jobChatRepo.getActivePathFromRoot(thread.id);
   const branches = await buildBranchInfoForPath(messages);
-  return { messages, branches, selectedNoteIds: thread.selectedNoteIds };
+  return {
+    messages,
+    branches,
+    selectedNoteIds: thread.selectedNoteIds,
+    selectedEmailIds: thread.selectedEmailIds,
+  };
 }
 
 async function runAssistantReply(
@@ -287,11 +552,16 @@ async function runAssistantReply(
     throw conflict("A chat generation is already running for this thread");
   }
 
-  const [context, llmConfig, history] = await Promise.all([
-    buildJobChatPromptContext(options.jobId, thread.selectedNoteIds),
-    resolveLlmRuntimeSettings(),
+  const [context, resolvedLlmConfig, history] = await Promise.all([
+    buildJobChatPromptContext(
+      options.jobId,
+      thread.selectedNoteIds,
+      thread.selectedEmailIds,
+    ),
+    options.llmConfig ?? resolveLlmRuntimeSettings(),
     buildConversationMessages(options.threadId, options.parentMessageId),
   ]);
+  const llmConfig = resolvedLlmConfig;
 
   const requestId = getRequestId() ?? "unknown";
 
@@ -373,10 +643,18 @@ async function runAssistantReply(
               },
             ]
           : []),
+        ...(context.selectedEmailsSnapshot
+          ? [
+              {
+                role: "system" as const,
+                content: context.selectedEmailsSnapshot,
+              },
+            ]
+          : []),
         ...history,
         {
           role: "user",
-          content: options.prompt,
+          content: buildUserPromptContent(options.prompt, options.attachments),
         },
       ],
       jsonSchema: CHAT_RESPONSE_SCHEMA,
@@ -505,7 +783,9 @@ export async function sendMessage(input: {
   jobId: string;
   threadId: string;
   content: string;
+  attachments?: readonly JobChatImageAttachment[];
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const content = input.content.trim();
@@ -517,13 +797,18 @@ export async function sendMessage(input: {
   if (!thread) {
     throw notFound("Thread not found for this job");
   }
-  if (input.selectedNoteIds !== undefined) {
-    await updateThreadSelectedNoteIds({
+  if (
+    input.selectedNoteIds !== undefined ||
+    input.selectedEmailIds !== undefined
+  ) {
+    await updateThreadContext({
       jobId: input.jobId,
       threadId: input.threadId,
       selectedNoteIds: input.selectedNoteIds,
+      selectedEmailIds: input.selectedEmailIds,
     });
   }
+  const llmConfig = await resolveAndValidateImageInput(input.attachments);
 
   // Determine parent: last message on the current active path
   const activePath = await jobChatRepo.getActivePathFromRoot(input.threadId);
@@ -535,6 +820,7 @@ export async function sendMessage(input: {
     jobId: input.jobId,
     role: "user",
     content,
+    attachments: input.attachments,
     status: "complete",
     tokensIn: estimateTokenCount(content),
     tokensOut: null,
@@ -553,6 +839,8 @@ export async function sendMessage(input: {
     jobId: input.jobId,
     threadId: input.threadId,
     prompt: content,
+    attachments: input.attachments,
+    llmConfig,
     parentMessageId: userMessage.id,
     stream: input.stream,
   });
@@ -571,7 +859,9 @@ export async function sendMessage(input: {
 export async function sendMessageForJob(input: {
   jobId: string;
   content: string;
+  attachments?: readonly JobChatImageAttachment[];
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const thread = await ensureJobThread(input.jobId);
@@ -579,7 +869,9 @@ export async function sendMessageForJob(input: {
     jobId: input.jobId,
     threadId: thread.id,
     content: input.content,
+    attachments: input.attachments,
     selectedNoteIds: input.selectedNoteIds,
+    selectedEmailIds: input.selectedEmailIds,
     stream: input.stream,
   });
 }
@@ -589,17 +881,22 @@ export async function regenerateMessage(input: {
   threadId: string;
   assistantMessageId: string;
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const thread = await jobChatRepo.getThreadForJob(input.jobId, input.threadId);
   if (!thread) {
     throw notFound("Thread not found for this job");
   }
-  if (input.selectedNoteIds !== undefined) {
-    await updateThreadSelectedNoteIds({
+  if (
+    input.selectedNoteIds !== undefined ||
+    input.selectedEmailIds !== undefined
+  ) {
+    await updateThreadContext({
       jobId: input.jobId,
       threadId: input.threadId,
       selectedNoteIds: input.selectedNoteIds,
+      selectedEmailIds: input.selectedEmailIds,
     });
   }
 
@@ -650,6 +947,7 @@ export async function regenerateMessage(input: {
     jobId: input.jobId,
     threadId: input.threadId,
     prompt: parentUserMessage.content,
+    attachments: parentUserMessage.attachments,
     replaceMessageId: target.id,
     version: (target.version || 1) + 1,
     parentMessageId: parentUserMessage.id,
@@ -671,6 +969,7 @@ export async function regenerateMessageForJob(input: {
   jobId: string;
   assistantMessageId: string;
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const thread = await ensureJobThread(input.jobId);
@@ -679,6 +978,7 @@ export async function regenerateMessageForJob(input: {
     threadId: thread.id,
     assistantMessageId: input.assistantMessageId,
     selectedNoteIds: input.selectedNoteIds,
+    selectedEmailIds: input.selectedEmailIds,
     stream: input.stream,
   });
 }
@@ -688,7 +988,9 @@ export async function editMessage(input: {
   threadId: string;
   messageId: string;
   content: string;
+  attachments?: readonly JobChatImageAttachment[];
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const content = input.content.trim();
@@ -700,13 +1002,18 @@ export async function editMessage(input: {
   if (!thread) {
     throw notFound("Thread not found for this job");
   }
-  if (input.selectedNoteIds !== undefined) {
-    await updateThreadSelectedNoteIds({
+  if (
+    input.selectedNoteIds !== undefined ||
+    input.selectedEmailIds !== undefined
+  ) {
+    await updateThreadContext({
       jobId: input.jobId,
       threadId: input.threadId,
       selectedNoteIds: input.selectedNoteIds,
+      selectedEmailIds: input.selectedEmailIds,
     });
   }
+  const llmConfig = await resolveAndValidateImageInput(input.attachments);
 
   const target = await jobChatRepo.getMessageById(input.messageId);
   if (
@@ -727,6 +1034,7 @@ export async function editMessage(input: {
     jobId: input.jobId,
     role: "user",
     content,
+    attachments: input.attachments,
     status: "complete",
     tokensIn: estimateTokenCount(content),
     tokensOut: null,
@@ -746,6 +1054,8 @@ export async function editMessage(input: {
     jobId: input.jobId,
     threadId: input.threadId,
     prompt: content,
+    attachments: input.attachments,
+    llmConfig,
     parentMessageId: newUserMessage.id,
     stream: input.stream,
   });
@@ -765,7 +1075,9 @@ export async function editMessageForJob(input: {
   jobId: string;
   messageId: string;
   content: string;
+  attachments?: readonly JobChatImageAttachment[];
   selectedNoteIds?: readonly string[];
+  selectedEmailIds?: readonly string[];
   stream?: GenerateReplyOptions["stream"];
 }) {
   const thread = await ensureJobThread(input.jobId);
@@ -774,7 +1086,9 @@ export async function editMessageForJob(input: {
     threadId: thread.id,
     messageId: input.messageId,
     content: input.content,
+    attachments: input.attachments,
     selectedNoteIds: input.selectedNoteIds,
+    selectedEmailIds: input.selectedEmailIds,
     stream: input.stream,
   });
 }

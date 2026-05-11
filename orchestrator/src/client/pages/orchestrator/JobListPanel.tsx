@@ -175,14 +175,23 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                   data-job-id={job.id}
                   data-virtual-row="true"
                   className={cn(
+                    // Base row layout and hover behavior.
                     "group absolute left-0 top-0 flex w-full items-center gap-3 border-l-2 border-b px-4 py-3 transition-colors cursor-pointer",
+                    // selected or checked
+                    (isChecked || isSelected) &&
+                      "shadow-[0_0_0_1px_hsl(var(--primary)/0.35)]",
+                    // Checked rows keep their left border and background emphasized.
                     isChecked
-                      ? "!border-l !border-l-primary !bg-muted/40"
+                      ? "border-l! border-l-primary bg-primary/15! hover:bg-primary/25!"
                       : "border-l border-l-border/40",
+                    // Selected rows use the primary tint so the active job stands out.
                     isSelected
-                      ? "bg-primary/15"
-                      : "border-b-border/40 hover:bg-muted/20",
-                    isChecked && isSelected && "outline-2 outline-primary/30",
+                      ? "bg-primary/15 hover:bg-primary/25"
+                      : "border-b-border/40 hover:bg-muted/80",
+                    // If the row is both selected and checked, add a subtle focus outline.
+                    isChecked &&
+                      isSelected &&
+                      "bg-primary/40 hover:bg-primary/20",
                   )}
                   style={{
                     transform: `translateY(${virtualRow.start}px)`,
@@ -205,11 +214,9 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                       onClick={(event) => event.stopPropagation()}
                       aria-label={`Select ${job.title}`}
                       className={cn(
-                        "absolute inset-0 m-0 border-border/80 cursor-pointer text-muted-foreground/70 transition-opacity duration-150 ease-out",
-                        "data-[state=checked]:border-primary data-[state=checked]:bg-primary/20 data-[state=checked]:text-primary",
-                        "data-[state=checked]:shadow-[0_0_0_1px_hsl(var(--primary)/0.35)]",
+                        "absolute inset-0 m-0 border-border/80 cursor-pointer text-muted-foreground/70 transition-opacity duration-150 ease-out data-[state=checked]:border-primary group-hover:border-primary data-[state=checked]:bg-primary/20 data-[state=checked]:text-primary",
                         isChecked || isSelected
-                          ? "opacity-100 pointer-events-auto"
+                          ? "opacity-100 pointer-events-auto border-primary/50"
                           : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto",
                       )}
                     />

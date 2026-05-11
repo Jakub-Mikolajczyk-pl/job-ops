@@ -3,12 +3,11 @@ import { useProfile } from "@client/hooks/useProfile";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
 import type { Job } from "@shared/types.js";
 import {
-  ArrowLeft,
   Check,
   CircleAlert,
   FileText,
   Loader2,
-  Sparkles,
+  RefreshCcw,
 } from "lucide-react";
 import type React from "react";
 import type { ComponentProps } from "react";
@@ -17,7 +16,6 @@ import { toast } from "sonner";
 import { formatUserFacingError } from "@/client/lib/error-format";
 import { showErrorToast } from "@/client/lib/error-toast";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -33,7 +31,6 @@ import {
   serializeTailoredSkills,
   toEditableSkillGroups,
 } from "../tailoring-utils";
-import { canFinalizeTailoring } from "./rules";
 import { TailoringSections } from "./TailoringSections";
 import {
   getTailoringSavePayloadKey,
@@ -53,17 +50,7 @@ interface TailoringWorkspaceEditorProps extends TailoringWorkspaceBaseProps {
   onBeforeGenerate?: () => boolean | Promise<boolean>;
 }
 
-interface TailoringWorkspaceTailorProps extends TailoringWorkspaceBaseProps {
-  mode: "tailor";
-  onBack: () => void;
-  onFinalize: () => void;
-  isFinalizing: boolean;
-  variant?: "discovered" | "ready";
-}
-
-type TailoringWorkspaceProps =
-  | TailoringWorkspaceEditorProps
-  | TailoringWorkspaceTailorProps;
+type TailoringWorkspaceProps = TailoringWorkspaceEditorProps;
 type TailoringSectionsProps = ComponentProps<typeof TailoringSections>;
 
 interface TailoringBaseline {
@@ -73,6 +60,7 @@ interface TailoringBaseline {
 }
 
 type AutosaveStatus = "saved" | "unsaved" | "saving" | "error";
+type TailoringGenerateTarget = "all" | "summary" | "headline" | "skills";
 
 const AutosaveStatusIcon: React.FC<{ status: AutosaveStatus }> = ({
   status,
@@ -122,6 +110,7 @@ const AutosaveStatusIcon: React.FC<{ status: AutosaveStatus }> = ({
 
 const normalizeSkillsJson = (value: string | null | undefined) =>
   serializeTailoredSkills(parseTailoredSkills(value));
+const textHasValue = (value: string) => value.trim().length > 0;
 
 const toBaselineFromJob = (job: Job): TailoringBaseline => ({
   summary: job.tailoredSummary ?? "",
@@ -141,9 +130,6 @@ const toSavePayloadFromJob = (job: Job): TailoringSavePayload => ({
 export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   props,
 ) => {
-  const editorProps = props.mode === "editor" ? props : null;
-  const tailorProps = props.mode === "tailor" ? props : null;
-
   const {
     catalog,
     isCatalogLoading,
@@ -165,6 +151,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     isDirty,
     savedPayloadKey,
     applyIncomingDraft,
+    markSavedSnapshot,
     markSavedJob,
     handleToggleProject,
     handleAddSkillGroup,
@@ -175,11 +162,10 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     onDirtyChange: props.onDirtyChange,
   });
 
-  const [isSaving, setIsSaving] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("saved");
-  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [generateTarget, setGenerateTarget] =
+    useState<TailoringGenerateTarget | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
   const saveAgainRef = useRef(false);
@@ -264,13 +250,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     };
   }, []);
 
-  const persistCurrent = useCallback(async () => {
-    const updatedJob = await api.updateJob(props.job.id, savePayload);
-    applyIncomingDraft(updatedJob);
-  }, [props.job.id, savePayload, applyIncomingDraft]);
-
   const runAutosaveLoop = useCallback(async () => {
-    if (!editorProps) return;
     if (saveInFlightRef.current) {
       saveAgainRef.current = true;
       await saveInFlightRef.current;
@@ -303,13 +283,14 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
             getTailoringSavePayloadKey(latestPayloadRef.current) ===
               snapshotKey;
           if (latestStillMatchesSnapshot) {
-            applyIncomingDraft(updatedJob);
-            latestPayloadRef.current = updatedPayload;
+            markSavedSnapshot(snapshot);
+            latestPayloadRef.current = snapshot;
           } else {
             markSavedJob(updatedJob);
           }
-          persistedPayloadKeyRef.current =
-            getTailoringSavePayloadKey(updatedPayload);
+          persistedPayloadKeyRef.current = latestStillMatchesSnapshot
+            ? snapshotKey
+            : getTailoringSavePayloadKey(updatedPayload);
 
           const latestKey = latestPayloadRef.current
             ? getTailoringSavePayloadKey(latestPayloadRef.current)
@@ -337,10 +318,9 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
 
     saveInFlightRef.current = savePromise;
     await savePromise;
-  }, [applyIncomingDraft, editorProps, markSavedJob, props.job.id]);
+  }, [markSavedJob, markSavedSnapshot, props.job.id]);
 
   const flushAutosave = useCallback(async () => {
-    if (!editorProps) return;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
@@ -357,10 +337,9 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     ) {
       await runAutosaveLoop();
     }
-  }, [editorProps, runAutosaveLoop]);
+  }, [runAutosaveLoop]);
 
   useEffect(() => {
-    if (!editorProps) return;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
@@ -390,62 +369,60 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
         autosaveTimerRef.current = null;
       }
     };
-  }, [editorProps, isDirty, runAutosaveLoop, savePayloadKey]);
+  }, [isDirty, runAutosaveLoop, savePayloadKey]);
 
   useEffect(() => {
-    if (!editorProps?.onRegisterSave) return;
-    editorProps.onRegisterSave(flushAutosave);
-  }, [editorProps, flushAutosave]);
+    if (!props.onRegisterSave) return;
+    props.onRegisterSave(flushAutosave);
+  }, [props.onRegisterSave, flushAutosave]);
+
+  const handleGenerateTailoring = useCallback(
+    async (target: TailoringGenerateTarget) => {
+      try {
+        setGenerateTarget(target);
+        await flushAutosave();
+
+        const updatedJob = await api.summarizeJob(props.job.id, {
+          force: true,
+          fields: target === "all" ? undefined : [target],
+        });
+        applyIncomingDraft(updatedJob);
+        setAiBaseline(toBaselineFromJob(updatedJob));
+        toast.success(
+          target === "all"
+            ? "Draft content generated"
+            : `${target[0].toUpperCase()}${target.slice(1)} generated`,
+        );
+        await props.onUpdate();
+      } catch (error) {
+        showErrorToast(error, "AI generation failed");
+      } finally {
+        setGenerateTarget(null);
+      }
+    },
+    [props.onUpdate, flushAutosave, props.job.id, applyIncomingDraft],
+  );
 
   const handleSummarizeEditor = useCallback(async () => {
-    if (!editorProps) return;
+    await handleGenerateTailoring("all");
+  }, [handleGenerateTailoring]);
 
-    try {
-      setIsSummarizing(true);
-      await flushAutosave();
+  const handleGenerateSummary = useCallback(async () => {
+    await handleGenerateTailoring("summary");
+  }, [handleGenerateTailoring]);
 
-      const updatedJob = await api.summarizeJob(props.job.id, { force: true });
-      applyIncomingDraft(updatedJob);
-      setAiBaseline(toBaselineFromJob(updatedJob));
-      toast.success("Draft content generated");
-      await editorProps.onUpdate();
-    } catch (error) {
-      showErrorToast(error, "AI summarization failed");
-    } finally {
-      setIsSummarizing(false);
-    }
-  }, [editorProps, flushAutosave, props.job.id, applyIncomingDraft]);
+  const handleGenerateHeadline = useCallback(async () => {
+    await handleGenerateTailoring("headline");
+  }, [handleGenerateTailoring]);
 
-  const handleGenerateWithAi = useCallback(async () => {
-    if (!tailorProps) return;
-
-    try {
-      setIsGenerating(true);
-
-      if (isDirty) {
-        await persistCurrent();
-      }
-
-      const updatedJob = await api.summarizeJob(props.job.id, { force: true });
-      applyIncomingDraft(updatedJob);
-      setAiBaseline(toBaselineFromJob(updatedJob));
-
-      toast.success("Draft generated with AI", {
-        description: "Review and edit before finalizing.",
-      });
-    } catch (error) {
-      showErrorToast(error, "Failed to generate AI draft");
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [tailorProps, isDirty, persistCurrent, props.job.id, applyIncomingDraft]);
+  const handleGenerateSkills = useCallback(async () => {
+    await handleGenerateTailoring("skills");
+  }, [handleGenerateTailoring]);
 
   const handleGeneratePdf = useCallback(async () => {
-    if (!editorProps) return;
-
     try {
-      const shouldProceed = editorProps.onBeforeGenerate
-        ? await editorProps.onBeforeGenerate()
+      const shouldProceed = props.onBeforeGenerate
+        ? await props.onBeforeGenerate()
         : true;
       if (shouldProceed === false) return;
 
@@ -453,7 +430,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       await flushAutosave();
       await api.generateJobPdf(props.job.id);
       toast.success("Resume PDF generated");
-      await editorProps.onUpdate();
+      await props.onUpdate();
     } catch (error) {
       const message = formatUserFacingError(error, "PDF generation failed");
       if (/tracer/i.test(message)) {
@@ -466,26 +443,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     } finally {
       setIsGeneratingPdf(false);
     }
-  }, [editorProps, flushAutosave, props.job.id]);
-
-  const handleFinalize = useCallback(async () => {
-    if (!tailorProps) return;
-
-    if (isDirty) {
-      try {
-        setIsSaving(true);
-        await persistCurrent();
-      } catch {
-        toast.error("Failed to save draft before finalizing");
-        setIsSaving(false);
-        return;
-      } finally {
-        setIsSaving(false);
-      }
-    }
-
-    tailorProps.onFinalize();
-  }, [tailorProps, isDirty, persistCurrent]);
+  }, [props.onBeforeGenerate, props.onUpdate, flushAutosave, props.job.id]);
 
   const handleUndoSummary = useCallback(() => {
     setSummary(originalValues.summary);
@@ -513,11 +471,9 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     );
   }, [aiBaseline.skillsJson, setSkillsDraft]);
 
-  const disableInputs = editorProps
-    ? isSummarizing || isGeneratingPdf || isSaving
-    : isGenerating || Boolean(tailorProps?.isFinalizing) || isSaving;
+  const disableInputs = Boolean(generateTarget) || isGeneratingPdf;
+  const isDraftReady = textHasValue(summary) && textHasValue(headline);
 
-  const canFinalize = canFinalizeTailoring(summary);
   const tailoringSectionsProps = useMemo<TailoringSectionsProps>(
     () => ({
       catalog,
@@ -531,8 +487,17 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       tracerEnableBlocked,
       tracerEnableBlockedReason,
       tracerReadinessChecking: isTracerReadinessChecking,
+      generatingSection:
+        generateTarget === "summary" ||
+        generateTarget === "headline" ||
+        generateTarget === "skills"
+          ? generateTarget
+          : null,
       openSkillGroupId,
       disableInputs,
+      onGenerateSummary: handleGenerateSummary,
+      onGenerateHeadline: handleGenerateHeadline,
+      onGenerateSkills: handleGenerateSkills,
       onSummaryChange: setSummary,
       onHeadlineChange: setHeadline,
       onUndoSummary: handleUndoSummary,
@@ -573,8 +538,12 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       tracerEnableBlocked,
       tracerEnableBlockedReason,
       isTracerReadinessChecking,
+      generateTarget,
       openSkillGroupId,
       disableInputs,
+      handleGenerateSummary,
+      handleGenerateHeadline,
+      handleGenerateSkills,
       setSummary,
       setHeadline,
       handleUndoSummary,
@@ -597,143 +566,76 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     ],
   );
 
-  if (editorProps) {
-    return (
-      <div className="space-y-4">
-        <div className="space-y-3 pb-2">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-semibold text-foreground/85">
-                Tailoring
-              </h3>
-              <AutosaveStatusIcon status={autosaveStatus} />
-            </div>
-            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-              Changes autosave. Draft resume content, or generate the PDF.
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button
-              onClick={handleSummarizeEditor}
-              disabled={isSummarizing || isGeneratingPdf}
-              variant="outline"
-              className="h-10 w-full gap-1.5 px-2 text-xs"
-            >
-              {isSummarizing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Draft Content
-            </Button>
-            <Button
-              onClick={handleGeneratePdf}
-              disabled={isSummarizing || isGeneratingPdf || !summary}
-              className="h-10 w-full gap-1.5 px-2 text-xs"
-            >
-              {isGeneratingPdf ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FileText className="mr-2 h-4 w-4" />
-              )}
-              Generate PDF
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-4 rounded-lg border bg-card p-4 shadow-sm">
-          <TailoringSections {...tailoringSectionsProps} />
-        </div>
-      </div>
-    );
-  }
-
-  if (!tailorProps) return null;
-
-  const finalizeVariant = tailorProps.variant ?? "discovered";
-
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          type="button"
-          onClick={tailorProps.onBack}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+    <div className="space-y-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+        <div
+          className={`flex min-h-16 items-center justify-between gap-3 rounded-md border px-3 py-3 ${
+            isDraftReady
+              ? "border-emerald-500/20 bg-emerald-500/[0.04]"
+              : "border-amber-500/20 bg-amber-500/[0.04]"
+          }`}
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to overview
-        </button>
-      </div>
-
-      <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-        <div className="flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-              <span className="text-xs font-medium text-amber-300">
-                Draft tailoring for this role
-              </span>
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+                isDraftReady
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-500/45 bg-amber-500/10 text-amber-300"
+              }`}
+            >
+              {isDraftReady ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <CircleAlert className="h-4 w-4" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground/90">
+                {isDraftReady ? "Draft ready" : "Draft incomplete"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/75">
+                {isDraftReady
+                  ? "Review optional sections before generating the PDF."
+                  : "Add a summary and headline to generate the PDF."}
+              </p>
             </div>
-            <p className="ml-4 mt-1 text-[10px] text-muted-foreground">
-              AI can draft summary, headline, skills, and project selection.
-            </p>
           </div>
+          <AutosaveStatusIcon status={autosaveStatus} />
+        </div>
 
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           <Button
-            size="sm"
+            onClick={handleSummarizeEditor}
+            disabled={Boolean(generateTarget) || isGeneratingPdf}
             variant="outline"
-            onClick={handleGenerateWithAi}
-            disabled={isGenerating || tailorProps.isFinalizing || isSaving}
-            className="h-8 w-full text-xs sm:w-auto"
+            size="sm"
           >
-            {isGenerating ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            {generateTarget === "all" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              <RefreshCcw className="h-4 w-4" />
             )}
-            Generate draft
+            Generate all
+          </Button>
+          <Button
+            onClick={handleGeneratePdf}
+            disabled={
+              Boolean(generateTarget) || isGeneratingPdf || !isDraftReady
+            }
+            size="sm"
+          >
+            {isGeneratingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            Generate PDF
           </Button>
         </div>
-
-        <TailoringSections {...tailoringSectionsProps} />
       </div>
 
-      <Separator className="my-4 opacity-50" />
-
-      <div className="space-y-2">
-        {!canFinalize && (
-          <p className="text-center text-[10px] text-muted-foreground">
-            Add a summary to{" "}
-            {finalizeVariant === "ready" ? "regenerate" : "finalize"}.
-          </p>
-        )}
-        <Button
-          onClick={() => void handleFinalize()}
-          disabled={tailorProps.isFinalizing || !canFinalize || isGenerating}
-          className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-500"
-        >
-          {tailorProps.isFinalizing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {finalizeVariant === "ready"
-                ? "Regenerating PDF..."
-                : "Finalizing & generating PDF..."}
-            </>
-          ) : (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              {finalizeVariant === "ready"
-                ? "Regenerate PDF"
-                : "Finalize & Move to Ready"}
-            </>
-          )}
-        </Button>
-        <p className="text-center text-[10px] text-muted-foreground/70">
-          {finalizeVariant === "ready"
-            ? "This will save your changes and regenerate the tailored PDF."
-            : "This will generate your tailored PDF and move the job to Ready."}
-        </p>
-      </div>
+      <TailoringSections {...tailoringSectionsProps} />
     </div>
   );
 };

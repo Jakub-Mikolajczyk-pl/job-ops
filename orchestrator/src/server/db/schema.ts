@@ -162,6 +162,7 @@ export const jobs = sqliteTable(
 		closedAt: integer("closed_at", { mode: "number" }),
 		suitabilityScore: real("suitability_score"),
 		suitabilityReason: text("suitability_reason"),
+		jobBrief: text("job_brief"),
 		tailoredSummary: text("tailored_summary"),
 		tailoredHeadline: text("tailored_headline"),
 		tailoredSkills: text("tailored_skills"),
@@ -328,6 +329,7 @@ export const jobChatThreads = sqliteTable(
 		lastMessageAt: text("last_message_at"),
 		activeRootMessageId: text("active_root_message_id"),
 		selectedNoteIds: text("selected_note_ids").notNull().default("[]"),
+		selectedEmailIds: text("selected_email_ids").notNull().default("[]"),
 	},
 	(table) => ({
 		jobUpdatedIndex: index("idx_job_chat_threads_job_updated").on(
@@ -362,6 +364,7 @@ export const jobChatMessages = sqliteTable(
 		replacesMessageId: text("replaces_message_id"),
 		parentMessageId: text("parent_message_id"),
 		activeChildId: text("active_child_id"),
+		attachments: text("attachments").notNull().default("[]"),
 		createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 		updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 	},

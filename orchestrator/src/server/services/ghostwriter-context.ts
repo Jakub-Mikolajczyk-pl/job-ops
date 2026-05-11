@@ -2,6 +2,10 @@ import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
 import {
+  buildGhostwriterEmailContextItems,
+  normalizeGhostwriterSelectedEmailIds,
+} from "@shared/ghostwriter-email-context.js";
+import {
   buildGhostwriterNoteContextItems,
   normalizeGhostwriterSelectedNoteIds,
 } from "@shared/ghostwriter-note-context.js";
@@ -31,6 +35,7 @@ export type JobChatPromptContext = {
   jobSnapshot: string;
   profileSnapshot: string;
   selectedNotesSnapshot: string;
+  selectedEmailsSnapshot: string;
 };
 
 const MAX_JOB_DESCRIPTION = 4000;
@@ -130,19 +135,33 @@ function buildProfileSnapshot(profile: ResumeProfile): string {
   ]);
 }
 
+async function listSelectedContextItems<TItem>(input: {
+  selectedIds: readonly string[];
+  normalize: (selectedIds: readonly string[]) => string[];
+  listItems: (normalizedIds: string[]) => Promise<TItem[]>;
+  getId: (item: TItem) => string;
+}): Promise<TItem[]> {
+  const normalizedIds = input.normalize(input.selectedIds);
+  if (normalizedIds.length === 0) return [];
+
+  const items = await input.listItems(normalizedIds);
+  const itemsById = new Map(items.map((item) => [input.getId(item), item]));
+  return normalizedIds
+    .map((selectedId) => itemsById.get(selectedId))
+    .filter((item): item is TItem => Boolean(item));
+}
+
 async function buildSelectedNotesSnapshot(
   jobId: string,
   selectedNoteIds: readonly string[],
 ): Promise<string> {
-  const normalizedNoteIds =
-    normalizeGhostwriterSelectedNoteIds(selectedNoteIds);
-  if (normalizedNoteIds.length === 0) return "";
-
-  const notes = await jobsRepo.listJobNotesByIds(jobId, normalizedNoteIds);
-  const notesById = new Map(notes.map((note) => [note.id, note]));
-  const selectedNotes = normalizedNoteIds
-    .map((noteId) => notesById.get(noteId))
-    .filter((note): note is (typeof notes)[number] => Boolean(note));
+  const selectedNotes = await listSelectedContextItems({
+    selectedIds: selectedNoteIds,
+    normalize: normalizeGhostwriterSelectedNoteIds,
+    listItems: (normalizedNoteIds) =>
+      jobsRepo.listJobNotesByIds(jobId, normalizedNoteIds),
+    getId: (note) => note.id,
+  });
 
   if (selectedNotes.length === 0) return "";
 
@@ -155,6 +174,47 @@ async function buildSelectedNotesSnapshot(
         `Updated: ${note.updatedAt}`,
         note.wasTrimmed ? "Context note: trimmed for AI context limits." : null,
         note.content ? `Content:\n${note.content}` : "Content: [empty]",
+      ]),
+    ),
+  ]);
+}
+
+async function buildSelectedEmailsSnapshot(
+  jobId: string,
+  selectedEmailIds: readonly string[],
+): Promise<string> {
+  const { listJobPostApplicationEmailsByIds } = await import(
+    "./post-application/job-emails"
+  );
+  const selectedEmails = await listSelectedContextItems({
+    selectedIds: selectedEmailIds,
+    normalize: normalizeGhostwriterSelectedEmailIds,
+    listItems: (normalizedEmailIds) =>
+      listJobPostApplicationEmailsByIds(jobId, normalizedEmailIds),
+    getId: (email) => email.message.id,
+  });
+
+  if (selectedEmails.length === 0) return "";
+
+  const context = buildGhostwriterEmailContextItems(selectedEmails);
+  return compactJoin([
+    "Selected Job Emails:",
+    ...context.items.map((email, index) =>
+      compactJoin([
+        `Email ${index + 1}: ${email.subject}`,
+        `Sender: ${email.sender}`,
+        email.receivedAt
+          ? `Received: ${new Date(email.receivedAt).toISOString()}`
+          : null,
+        `Type: ${email.messageType}`,
+        `Status: ${email.processingStatus}`,
+        email.matchConfidence !== null
+          ? `Match confidence: ${email.matchConfidence}%`
+          : null,
+        email.wasTrimmed
+          ? "Context note: snippet trimmed for AI context limits."
+          : null,
+        email.snippet ? `Snippet:\n${email.snippet}` : "Snippet: [empty]",
       ]),
     ),
   ]);
@@ -200,6 +260,7 @@ async function isStopSlopEnabled(): Promise<boolean> {
 export async function buildJobChatPromptContext(
   jobId: string,
   selectedNoteIds: readonly string[] = [],
+  selectedEmailIds: readonly string[] = [],
 ): Promise<JobChatPromptContext> {
   const job = await jobsRepo.getJobById(jobId);
   if (!job) {
@@ -219,12 +280,17 @@ export async function buildJobChatPromptContext(
   }
 
   const profileSnapshot = buildProfileSnapshot(profile);
-  const [baseSystemPrompt, stopSlopEnabled, selectedNotesSnapshot] =
-    await Promise.all([
-      buildSystemPrompt(style, profile),
-      isStopSlopEnabled(),
-      buildSelectedNotesSnapshot(jobId, selectedNoteIds),
-    ]);
+  const [
+    baseSystemPrompt,
+    stopSlopEnabled,
+    selectedNotesSnapshot,
+    selectedEmailsSnapshot,
+  ] = await Promise.all([
+    buildSystemPrompt(style, profile),
+    isStopSlopEnabled(),
+    buildSelectedNotesSnapshot(jobId, selectedNoteIds),
+    buildSelectedEmailsSnapshot(jobId, selectedEmailIds),
+  ]);
   const systemPrompt = stopSlopEnabled
     ? `${baseSystemPrompt}\n\n${STOP_SLOP_GHOSTWRITER_PROMPT}`
     : baseSystemPrompt;
@@ -242,8 +308,11 @@ export async function buildJobChatPromptContext(
       jobChars: jobSnapshot.length,
       profileChars: profileSnapshot.length,
       selectedNotesChars: selectedNotesSnapshot.length,
+      selectedEmailsChars: selectedEmailsSnapshot.length,
       selectedNoteCount:
         normalizeGhostwriterSelectedNoteIds(selectedNoteIds).length,
+      selectedEmailCount:
+        normalizeGhostwriterSelectedEmailIds(selectedEmailIds).length,
     }),
   });
 
@@ -254,5 +323,6 @@ export async function buildJobChatPromptContext(
     jobSnapshot,
     profileSnapshot,
     selectedNotesSnapshot,
+    selectedEmailsSnapshot,
   };
 }

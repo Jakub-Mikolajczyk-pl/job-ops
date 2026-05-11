@@ -18,25 +18,69 @@ const listMessagesQuerySchema = z.object({
 });
 
 const selectedNoteIdsSchema = z.array(z.string().trim().min(1)).default([]);
+const selectedEmailIdsSchema = z.array(z.string().trim().min(1)).default([]);
+const selectedContextSchema = {
+  selectedNoteIds: selectedNoteIdsSchema.optional(),
+  selectedEmailIds: selectedEmailIdsSchema.optional(),
+};
 
-const updateContextSchema = z.object({
-  selectedNoteIds: selectedNoteIdsSchema,
-});
+const updateContextSchema = z
+  .object({
+    ...selectedContextSchema,
+  })
+  .refine(
+    (input) =>
+      input.selectedNoteIds !== undefined ||
+      input.selectedEmailIds !== undefined,
+    {
+      message: "At least one context selection must be provided.",
+    },
+  );
+
+const imageAttachmentSchema = z
+  .object({
+    id: z.string().trim().max(80).optional(),
+    name: z.string().trim().min(1).max(180),
+    mediaType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+    dataUrl: z
+      .string()
+      .max(2_800_000)
+      .regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+  })
+  .superRefine((attachment, ctx) => {
+    if (
+      !attachment.dataUrl.startsWith(`data:${attachment.mediaType};base64,`)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["dataUrl"],
+        message:
+          "Image data URL media type must match the attachment media type.",
+      });
+    }
+  });
+
+const imageAttachmentsSchema = z
+  .array(imageAttachmentSchema)
+  .max(3)
+  .default([]);
 
 const sendMessageSchema = z.object({
   content: z.string().trim().min(1).max(20000),
-  selectedNoteIds: selectedNoteIdsSchema.optional(),
+  ...selectedContextSchema,
+  attachments: imageAttachmentsSchema.optional(),
   stream: z.boolean().optional(),
 });
 
 const regenerateSchema = z.object({
-  selectedNoteIds: selectedNoteIdsSchema.optional(),
+  ...selectedContextSchema,
   stream: z.boolean().optional(),
 });
 
 const editMessageSchema = z.object({
   content: z.string().trim().min(1).max(20000),
-  selectedNoteIds: selectedNoteIdsSchema.optional(),
+  ...selectedContextSchema,
+  attachments: imageAttachmentsSchema.optional(),
   stream: z.boolean().optional(),
 });
 
@@ -70,6 +114,7 @@ ghostwriterRouter.get(
         messages: result.messages,
         branches: result.branches,
         selectedNoteIds: result.selectedNoteIds,
+        selectedEmailIds: result.selectedEmailIds,
       });
     });
   }),
@@ -91,6 +136,7 @@ ghostwriterRouter.patch(
       const result = await ghostwriterService.updateContextForJob({
         jobId,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
       ok(res, result);
     });
@@ -121,7 +167,9 @@ ghostwriterRouter.post(
           await ghostwriterService.sendMessageForJob({
             jobId,
             content: parsed.data.content,
+            attachments: parsed.data.attachments,
             selectedNoteIds: parsed.data.selectedNoteIds,
+            selectedEmailIds: parsed.data.selectedEmailIds,
             stream: {
               onReady: ({ runId, threadId, messageId, requestId }) =>
                 writeSseData(res, {
@@ -178,7 +226,9 @@ ghostwriterRouter.post(
       const result = await ghostwriterService.sendMessageForJob({
         jobId,
         content: parsed.data.content,
+        attachments: parsed.data.attachments,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
 
       ok(res, {
@@ -239,6 +289,7 @@ ghostwriterRouter.post(
             jobId,
             assistantMessageId,
             selectedNoteIds: parsed.data.selectedNoteIds,
+            selectedEmailIds: parsed.data.selectedEmailIds,
             stream: {
               onReady: ({ runId, threadId, messageId, requestId }) =>
                 writeSseData(res, {
@@ -296,6 +347,7 @@ ghostwriterRouter.post(
         jobId,
         assistantMessageId,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
 
       ok(res, result);
@@ -332,7 +384,9 @@ ghostwriterRouter.post(
             jobId,
             messageId,
             content: parsed.data.content,
+            attachments: parsed.data.attachments,
             selectedNoteIds: parsed.data.selectedNoteIds,
+            selectedEmailIds: parsed.data.selectedEmailIds,
             stream: {
               onReady: ({ runId, threadId, messageId, requestId }) =>
                 writeSseData(res, {
@@ -390,7 +444,9 @@ ghostwriterRouter.post(
         jobId,
         messageId,
         content: parsed.data.content,
+        attachments: parsed.data.attachments,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
 
       ok(res, {
@@ -529,7 +585,9 @@ ghostwriterRouter.post(
             jobId,
             threadId,
             content: parsed.data.content,
+            attachments: parsed.data.attachments,
             selectedNoteIds: parsed.data.selectedNoteIds,
+            selectedEmailIds: parsed.data.selectedEmailIds,
             stream: {
               onReady: ({ runId, messageId, requestId }) =>
                 writeSseData(res, {
@@ -587,7 +645,9 @@ ghostwriterRouter.post(
         jobId,
         threadId,
         content: parsed.data.content,
+        attachments: parsed.data.attachments,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
 
       ok(res, {
@@ -654,6 +714,7 @@ ghostwriterRouter.post(
             threadId,
             assistantMessageId,
             selectedNoteIds: parsed.data.selectedNoteIds,
+            selectedEmailIds: parsed.data.selectedEmailIds,
             stream: {
               onReady: ({ runId, messageId, requestId }) =>
                 writeSseData(res, {
@@ -712,6 +773,7 @@ ghostwriterRouter.post(
         threadId,
         assistantMessageId,
         selectedNoteIds: parsed.data.selectedNoteIds,
+        selectedEmailIds: parsed.data.selectedEmailIds,
       });
 
       ok(res, result);

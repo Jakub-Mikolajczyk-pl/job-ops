@@ -44,7 +44,7 @@ import type {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Settings } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FormProvider,
   type Resolver,
@@ -66,6 +66,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   model: "",
@@ -365,6 +366,12 @@ const toRxResumeValidationBadgeState = (
   message: validation.valid ? null : (validation.message ?? null),
   status: validation.valid ? null : (validation.status ?? null),
 });
+const isRxResumeMissingConfigValidationFailure = (
+  validation: ValidationResult,
+): boolean =>
+  !validation.valid &&
+  validation.status === 400 &&
+  /not configured/i.test(validation.message ?? "");
 
 const normalizeLlmProviderValue = (
   value: string | null | undefined,
@@ -704,6 +711,7 @@ export const SettingsPage: React.FC = () => {
     useState<RxResumeValidationBadgeState>(
       EMPTY_RXRESUME_VALIDATION_BADGE_STATE,
     );
+  const rxresumeSilentValidationAttemptedRef = useRef(false);
   const [statusesToClear, setStatusesToClear] = useState<JobStatus[]>([
     "discovered",
   ]);
@@ -765,7 +773,9 @@ export const SettingsPage: React.FC = () => {
     control,
     name: "resumeProjects",
   });
-  const hasRxResumeAccess = Boolean(rxresumeValidationStatus.valid);
+  const hasRxResumeAccess = Boolean(
+    storedRxResume.hasV5 || rxresumeValidationStatus.valid,
+  );
 
   useEffect(() => {
     if (!settingsQuery.data) return;
@@ -905,6 +915,7 @@ export const SettingsPage: React.FC = () => {
   );
 
   const clearRxResumeValidationFeedback = useCallback(() => {
+    rxresumeSilentValidationAttemptedRef.current = false;
     setRxresumeValidationStatus(EMPTY_RXRESUME_VALIDATION_BADGE_STATE);
     clearErrors(["rxresumeApiKey"]);
   }, [clearErrors]);
@@ -912,6 +923,9 @@ export const SettingsPage: React.FC = () => {
   const validateRxresume = useCallback(
     async (options?: { silent?: boolean; persistOnSuccess?: boolean }) => {
       const { silent = false, persistOnSuccess = true } = options ?? {};
+      if (silent) {
+        rxresumeSilentValidationAttemptedRef.current = true;
+      }
       const notify = !silent;
       const values = getValues();
       const draftCredentials = getRxResumeCredentialDrafts(values);
@@ -929,7 +943,14 @@ export const SettingsPage: React.FC = () => {
           formatUserFacingError(error, "RxResume validation failed"),
       });
 
-      setRxResumeValidationStatus(result.validation);
+      if (
+        silent &&
+        isRxResumeMissingConfigValidationFailure(result.validation)
+      ) {
+        setRxresumeValidationStatus(EMPTY_RXRESUME_VALIDATION_BADGE_STATE);
+      } else {
+        setRxResumeValidationStatus(result.validation);
+      }
 
       if (result.updatedSettings) {
         setSettings(result.updatedSettings);
@@ -965,7 +986,10 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (!settings) return;
 
-    if (!rxresumeValidationStatus.checked) {
+    if (
+      !rxresumeValidationStatus.checked &&
+      !rxresumeSilentValidationAttemptedRef.current
+    ) {
       void validateRxresume({ silent: true, persistOnSuccess: false });
     }
   }, [rxresumeValidationStatus, settings, validateRxresume]);
@@ -1591,7 +1615,7 @@ export const SettingsPage: React.FC = () => {
       <main className="container mx-auto px-4 py-6 pb-12">
         <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-6 lg:self-start">
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/95">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
               <div className="border-b px-4 py-4">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1636,11 +1660,12 @@ export const SettingsPage: React.FC = () => {
                                   key={item.id}
                                   type="button"
                                   variant="ghost"
-                                  className={`h-9 w-full justify-start rounded-md px-3 text-left text-sm font-medium ${
+                                  className={cn(
+                                    "h-9 w-full justify-start rounded-md px-3 text-left text-sm font-medium",
                                     isActive
-                                      ? "border border-orange-400/40 bg-orange-500/12 text-orange-100 hover:bg-orange-500/18 hover:text-orange-50"
-                                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                                  }`}
+                                      ? "border border-primary/40 bg-primary/12 text-white hover:bg-primary/18"
+                                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                                  )}
                                   onClick={() => setActiveSection(item.id)}
                                 >
                                   {item.label}
@@ -1661,7 +1686,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </aside>
 
-          <section className="space-y-4">
+          <section className="space-y-4 border border-border/70 rounded-2xl bg-card p-6 h-fit">
             <header className="space-y-4 border-b border-border/70 pb-5">
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
                 <span>{activeGroup.label}</span>

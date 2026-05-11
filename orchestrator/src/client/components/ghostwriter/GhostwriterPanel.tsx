@@ -2,9 +2,11 @@ import * as api from "@client/api";
 import type {
   BranchInfo,
   Job,
+  JobChatImageAttachment,
   JobChatMessage,
   JobChatStreamEvent,
   JobNote,
+  PostApplicationJobEmailItem,
 } from "@shared/types";
 import { Settings2 } from "lucide-react";
 import type React from "react";
@@ -25,8 +27,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { bucketQueryLength, trackProductEvent } from "@/lib/analytics";
 import { Composer } from "./Composer";
+import { GhostwriterContextSelector } from "./GhostwriterContextSelector";
 import { MessageList } from "./MessageList";
-import { NoteContextSelector } from "./NoteContextSelector";
+
+const JOB_EMAIL_LIMIT = 100;
 
 type GhostwriterPanelProps = {
   job: Job;
@@ -42,9 +46,12 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
   const [messages, setMessages] = useState<JobChatMessage[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [notes, setNotes] = useState<JobNote[]>([]);
+  const [emails, setEmails] = useState<PostApplicationJobEmailItem[]>([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [selectedEmailIds, setSelectedEmailIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [areNotesLoading, setAreNotesLoading] = useState(true);
+  const [areEmailsLoading, setAreEmailsLoading] = useState(true);
   const [isSavingContext, setIsSavingContext] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
@@ -78,6 +85,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
     setMessages(data.messages);
     setBranches(data.branches);
     setSelectedNoteIds(data.selectedNoteIds);
+    setSelectedEmailIds(data.selectedEmailIds);
   }, [job.id]);
 
   const loadNotes = useCallback(async () => {
@@ -92,16 +100,28 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
     }
   }, [job.id]);
 
+  const loadEmails = useCallback(async () => {
+    setAreEmailsLoading(true);
+    try {
+      const data = await api.getJobEmails(job.id, { limit: JOB_EMAIL_LIMIT });
+      setEmails(data.items);
+    } catch (error) {
+      showErrorToast(error, "Failed to load emails");
+    } finally {
+      setAreEmailsLoading(false);
+    }
+  }, [job.id]);
+
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      await Promise.all([loadMessages(), loadNotes()]);
+      await Promise.all([loadMessages(), loadNotes(), loadEmails()]);
     } catch (error) {
       showErrorToast(error, "Failed to load Ghostwriter");
     } finally {
       setIsLoading(false);
     }
-  }, [loadMessages, loadNotes]);
+  }, [loadEmails, loadMessages, loadNotes]);
 
   useEffect(() => {
     void load();
@@ -143,6 +163,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
               replacesMessageId: null,
               parentMessageId: null,
               activeChildId: null,
+              attachments: [],
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -199,7 +220,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
   );
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachments: JobChatImageAttachment[] = []) => {
       if (isStreaming) return;
 
       const optimisticUser: JobChatMessage = {
@@ -215,6 +236,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
         replacesMessageId: null,
         parentMessageId: null,
         activeChildId: null,
+        attachments,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -229,7 +251,13 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
       try {
         await api.streamJobGhostwriterMessage(
           job.id,
-          { content, selectedNoteIds, signal: controller.signal },
+          {
+            content,
+            selectedNoteIds,
+            selectedEmailIds,
+            attachments,
+            signal: controller.signal,
+          },
           { onEvent: onStreamEvent },
         );
 
@@ -251,6 +279,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
       loadMessages,
       messages,
       onStreamEvent,
+      selectedEmailIds,
       selectedNoteIds,
     ],
   );
@@ -292,7 +321,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
         await api.streamRegenerateJobGhostwriterMessage(
           job.id,
           assistantMessageId,
-          { selectedNoteIds, signal: controller.signal },
+          { selectedNoteIds, selectedEmailIds, signal: controller.signal },
           { onEvent: onStreamEvent },
         );
         await loadMessages();
@@ -306,11 +335,22 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
         setIsStreaming(false);
       }
     },
-    [isStreaming, job.id, loadMessages, onStreamEvent, selectedNoteIds],
+    [
+      isStreaming,
+      job.id,
+      loadMessages,
+      onStreamEvent,
+      selectedEmailIds,
+      selectedNoteIds,
+    ],
   );
 
   const editMessage = useCallback(
-    async (messageId: string, content: string) => {
+    async (
+      messageId: string,
+      content: string,
+      attachments: JobChatImageAttachment[] = [],
+    ) => {
       if (isStreaming) return;
 
       // Remove the edited message and everything below it (old branch disappears)
@@ -334,6 +374,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
             replacesMessageId: null,
             parentMessageId: null,
             activeChildId: null,
+            attachments,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
@@ -349,7 +390,13 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
         await api.editJobGhostwriterMessage(
           job.id,
           messageId,
-          { content, selectedNoteIds, signal: controller.signal },
+          {
+            content,
+            selectedNoteIds,
+            selectedEmailIds,
+            attachments,
+            signal: controller.signal,
+          },
           { onEvent: onStreamEvent },
         );
         await loadMessages();
@@ -363,28 +410,68 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
         setIsStreaming(false);
       }
     },
-    [isStreaming, job.id, loadMessages, onStreamEvent, selectedNoteIds],
+    [
+      isStreaming,
+      job.id,
+      loadMessages,
+      onStreamEvent,
+      selectedEmailIds,
+      selectedNoteIds,
+    ],
   );
 
-  const updateSelectedNotes = useCallback(
-    async (nextSelectedNoteIds: string[]) => {
+  const updateSelectedContext = useCallback(
+    async (input: {
+      selectedNoteIds?: string[];
+      selectedEmailIds?: string[];
+      errorMessage: string;
+    }) => {
       const previousSelectedNoteIds = selectedNoteIds;
-      setSelectedNoteIds(nextSelectedNoteIds);
+      const previousSelectedEmailIds = selectedEmailIds;
+
+      if (input.selectedNoteIds !== undefined) {
+        setSelectedNoteIds(input.selectedNoteIds);
+      }
+      if (input.selectedEmailIds !== undefined) {
+        setSelectedEmailIds(input.selectedEmailIds);
+      }
+
       setIsSavingContext(true);
 
       try {
         const result = await api.updateJobGhostwriterContext(job.id, {
-          selectedNoteIds: nextSelectedNoteIds,
+          selectedNoteIds: input.selectedNoteIds,
+          selectedEmailIds: input.selectedEmailIds,
         });
         setSelectedNoteIds(result.selectedNoteIds);
+        setSelectedEmailIds(result.selectedEmailIds);
       } catch (error) {
         setSelectedNoteIds(previousSelectedNoteIds);
-        showErrorToast(error, "Failed to update Ghostwriter notes");
+        setSelectedEmailIds(previousSelectedEmailIds);
+        showErrorToast(error, input.errorMessage);
       } finally {
         setIsSavingContext(false);
       }
     },
-    [job.id, selectedNoteIds],
+    [job.id, selectedEmailIds, selectedNoteIds],
+  );
+
+  const updateSelectedNotes = useCallback(
+    (nextSelectedNoteIds: string[]) =>
+      updateSelectedContext({
+        selectedNoteIds: nextSelectedNoteIds,
+        errorMessage: "Failed to update Ghostwriter notes",
+      }),
+    [updateSelectedContext],
+  );
+
+  const updateSelectedEmails = useCallback(
+    (nextSelectedEmailIds: string[]) =>
+      updateSelectedContext({
+        selectedEmailIds: nextSelectedEmailIds,
+        errorMessage: "Failed to update Ghostwriter emails",
+      }),
+    [updateSelectedContext],
   );
 
   const switchBranch = useCallback(
@@ -480,14 +567,20 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
           isStreaming={isStreaming}
           canReset={canReset}
           noteContextSelector={
-            <NoteContextSelector
+            <GhostwriterContextSelector
               notes={notes}
+              emails={emails}
               selectedNoteIds={selectedNoteIds}
+              selectedEmailIds={selectedEmailIds}
               disabled={isLoading || isStreaming}
-              isLoading={areNotesLoading}
+              areNotesLoading={areNotesLoading}
+              areEmailsLoading={areEmailsLoading}
               isSaving={isSavingContext}
-              onChange={(nextSelectedNoteIds) =>
+              onNotesChange={(nextSelectedNoteIds) =>
                 void updateSelectedNotes(nextSelectedNoteIds)
+              }
+              onEmailsChange={(nextSelectedEmailIds) =>
+                void updateSelectedEmails(nextSelectedEmailIds)
               }
             />
           }

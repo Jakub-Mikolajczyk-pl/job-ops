@@ -49,8 +49,14 @@ export type LegacyApiResponse<T> =
 
 export type StreamSseInput =
   | import("@shared/types").JobActionRequest
-  | { content: string; selectedNoteIds?: string[]; stream: true }
-  | { selectedNoteIds?: string[]; stream: true };
+  | {
+      content: string;
+      selectedNoteIds?: string[];
+      selectedEmailIds?: string[];
+      attachments?: import("@shared/types").JobChatImageAttachment[];
+      stream: true;
+    }
+  | { selectedNoteIds?: string[]; selectedEmailIds?: string[]; stream: true };
 
 function describeAction(endpoint: string, method?: string): string {
   const verb = (method || "GET").toUpperCase();

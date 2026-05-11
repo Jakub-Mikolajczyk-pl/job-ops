@@ -1,16 +1,8 @@
 import type { AppliedDuplicateMatch, Job } from "@shared/types.js";
-import {
-  ArrowUpRight,
-  Calendar,
-  DollarSign,
-  Loader2,
-  MapPin,
-  Search,
-} from "lucide-react";
+import { Calendar, DollarSign, Loader2, MapPin, Search } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -20,6 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn, formatDate, sourceLabel } from "@/lib/utils";
 import { useSettings } from "../hooks/useSettings";
+import { ScoreRing } from "../pages/job-page/JobPageLeftSidebar";
 import { appliedDuplicateIndicator } from "../pages/orchestrator/constants";
 import {
   getJobStatusIndicator,
@@ -31,43 +24,8 @@ interface JobHeaderProps {
   job: Job;
   className?: string;
   onCheckSponsor?: () => Promise<void>;
+  jobCTA?: React.ReactNode;
 }
-
-const ScoreMeter: React.FC<{
-  score: number | null;
-  tooltip?: React.ReactNode;
-}> = ({ score, tooltip }) => {
-  if (score == null) {
-    return <span className="text-[10px] text-muted-foreground/60">-</span>;
-  }
-
-  const content = (
-    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-      <div className="h-1 w-12 rounded-full bg-muted/30">
-        <div
-          className="h-1 rounded-full bg-primary/50"
-          style={{ width: `${Math.max(4, Math.min(100, score))}%` }}
-        />
-      </div>
-      <span className="tabular-nums">{score}</span>
-    </div>
-  );
-
-  if (!tooltip) {
-    return content;
-  }
-
-  return (
-    <TooltipProvider>
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          {tooltip}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-};
 
 interface SponsorPillProps {
   score: number | null;
@@ -322,6 +280,7 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
   job,
   className,
   onCheckSponsor,
+  jobCTA,
 }) => {
   const jobStatus = getJobStatusIndicator(job.status);
   const tracerStatus = getTracerStatusIndicator(job.tracerLinksEnabled);
@@ -345,85 +304,58 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
       recorded.
     </p>
   ) : undefined;
-  const scoreTooltip =
-    job.suitabilityScore == null ? undefined : (
-      <p className="text-xs">
-        Suitability score: {job.suitabilityScore}/100. Higher is better.
-      </p>
-    );
-
   return (
-    <div className={cn("space-y-3", className)}>
+    <div
+      className={cn(
+        "space-y-3 p-4 bg-muted/30 rounded-lg rounded-b-none border border-b-0 border-border",
+        className,
+      )}
+    >
       {/* Detail header: lighter weight than list items */}
-      <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0 w-full sm:w-auto sm:flex-1">
           <Link
             to={`/job/${job.id}`}
             state={jobPageLinkState}
-            className="block text-base font-semibold leading-snug text-foreground/90 underline-offset-2 break-words hover:underline"
+            className="block text-xl font-bold underline-offset-2 break-words hover:underline"
           >
             {job.title}
           </Link>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{job.employer}</span>
+
+          <span>{job.employer}</span>
+
+          <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground/70 mt-1">
+            {(job.location || job.isRemote) && (
+              <span className="flex items-center gap-1">
+                <MapPin className="size-4" />
+                {job.location?.trim()}
+                {job.isRemote && ", Remote"}
+              </span>
+            )}
+            {deadline && (
+              <span className="flex items-center gap-1">
+                <Calendar className="size-4" />
+                {deadline}
+              </span>
+            )}
+            {job.salary && (
+              <span className="flex items-center gap-1">
+                <DollarSign className="size-4" />
+                {job.salary}
+              </span>
+            )}
           </div>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          <Badge
-            variant="outline"
-            className="text-[10px] uppercase tracking-wide text-muted-foreground border-border/50"
-          >
-            {sourceLabel[job.source]}
-          </Badge>
-          {job.isRemote === true && (
-            <Badge
-              variant="outline"
-              className="text-[10px] uppercase tracking-wide text-muted-foreground border-border/50"
-            >
-              Remote
-            </Badge>
-          )}
-          {!isJobPage && (
-            <Button
-              asChild
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-[10px] uppercase tracking-wide"
-            >
-              <Link to={`/job/${job.id}`} state={jobPageLinkState}>
-                View
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Tertiary metadata - subdued */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-        {job.location && (
-          <span className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" />
-            {job.location}
-          </span>
-        )}
-        {deadline && (
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {deadline}
-          </span>
-        )}
-        {job.salary && (
-          <span className="flex items-center gap-1">
-            <DollarSign className="h-3 w-3" />
-            {job.salary}
-          </span>
-        )}
+        <div className="flex w-full flex-row-reverse sm:flex-col justify-between items-end gap-4 sm:w-auto sm:justify-end h-full">
+          <ScoreRing score={job.suitabilityScore} size="sm" />
+          {jobCTA && <>{jobCTA}</>}
+        </div>
       </div>
 
       {/* Status and score: single line, subdued */}
-      <div className="flex items-center justify-between gap-2 py-1 border-y border-border/30">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-2 py-1 border-y border-border/30 flex-wrap">
+        <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
           <StatusIndicator
             dotColor={jobStatus.dotColor}
             label={jobStatus.label}
@@ -438,6 +370,7 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
             tooltipClassName="max-w-xs"
             className={tracerStatusTooltip ? "cursor-help" : undefined}
           />
+
           <AppliedDuplicatePill match={job.appliedDuplicateMatch} />
           <OePill
             oeFitnessScore={job.oeFitnessScore}
@@ -453,6 +386,23 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
               ~{job.weeklyHoursEstimate}h/wk
             </span>
           )}
+
+          {job.source && (
+            <StatusIndicator
+              variant="sky"
+              tooltip={`Job found on ${sourceLabel[job.source]}`}
+              label={job.source ? sourceLabel[job.source] : "Unknown Source"}
+            />
+          )}
+
+          {job.isRemote === true && (
+            <StatusIndicator
+              variant="emerald"
+              label="Remote"
+              dotColor="bg-emerald-400"
+              tooltip="The job claims to be remote"
+            />
+          )}
           {showSponsorInfo && (
             <SponsorPill
               score={job.sponsorMatchScore}
@@ -461,7 +411,6 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
             />
           )}
         </div>
-        <ScoreMeter score={job.suitabilityScore} tooltip={scoreTooltip} />
       </div>
     </div>
   );
