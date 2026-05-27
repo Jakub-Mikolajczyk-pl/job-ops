@@ -1,12 +1,12 @@
 import {
 	Activity,
 	BarChart3,
-	Bell,
 	Bookmark,
 	BookOpen,
 	Briefcase,
 	Building2,
 	Columns3,
+	Eye,
 	FilePenLine,
 	GitMerge,
 	Home,
@@ -14,6 +14,7 @@ import {
 	LayoutDashboard,
 	Link2,
 	Settings,
+	Shield,
 	TrendingUp,
 } from "lucide-react";
 
@@ -47,7 +48,7 @@ export const NAV_LINKS: NavLink[] = [
 	},
 	{
 		to: "/design-resume",
-		label: "Design Resume",
+		label: "Resume Studio",
 		icon: FilePenLine,
 		activePaths: ["/design-resume"],
 	},
@@ -63,7 +64,8 @@ export const NAV_LINKS: NavLink[] = [
 	{ to: "/my-employment", label: "Employment", icon: Briefcase },
 	{ to: "/skill-demand", label: "Skill Demand", icon: TrendingUp },
 	{ to: "/pivot-finder", label: "Pivot Finder", icon: GitMerge },
-	{ to: "/watchlist", label: "Watchlist", icon: Bell },
+	{ to: "/visa-sponsors", label: "Visa Sponsors", icon: Shield },
+	{ to: "/watchlist", label: "Watchlist", icon: Eye },
 	{ to: "/saved-searches", label: "Saved", icon: Bookmark },
 	{ to: "/settings", label: "Settings", icon: Settings },
 ];

@@ -132,6 +132,7 @@ export async function getJobListItems(
 	const selection = {
 		id: jobs.id,
 		source: jobs.source,
+		sourceJobId: jobs.sourceJobId,
 		title: jobs.title,
 		employer: jobs.employer,
 		jobUrl: jobs.jobUrl,
@@ -449,6 +450,27 @@ export async function getJobByUrl(jobUrl: string): Promise<Job | null> {
 		.from(jobs)
 		.where(and(eq(jobs.tenantId, tenantId), eq(jobs.jobUrl, jobUrl)));
 	return row ? mapRowToJob(row) : null;
+}
+
+/**
+ * Get a job by source-specific external ID (for deduplication).
+ */
+export async function getJobBySourceJobId(
+  source: string,
+  sourceJobId: string,
+): Promise<Job | null> {
+  const tenantId = getActiveTenantId();
+  const [row] = await db
+    .select()
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.tenantId, tenantId),
+        eq(jobs.source, source),
+        eq(jobs.sourceJobId, sourceJobId),
+      ),
+    );
+  return row ? mapRowToJob(row) : null;
 }
 
 /**

@@ -17,10 +17,23 @@ const AUTO_PDF_REGEN_RETRY_DELAY_MS = 5000;
 
 const SETTINGS_INVALIDATION_KEYS = new Set<SettingKey>([
   "pdfRenderer",
+  "typstTheme",
   "rxresumeBaseResumeId",
   "rxresumeUrl",
   "rxresumeApiKey",
 ]);
+
+function onlyInvalidatesTypstTheme(
+  updatedSettingKeys: ReadonlyArray<SettingKey>,
+): boolean {
+  let foundTypstTheme = false;
+  for (const key of updatedSettingKeys) {
+    if (!SETTINGS_INVALIDATION_KEYS.has(key)) continue;
+    if (key !== "typstTheme") return false;
+    foundTypstTheme = true;
+  }
+  return foundTypstTheme;
+}
 
 let workerPromise: Promise<void> | null = null;
 let workerRequested = false;
@@ -256,6 +269,11 @@ export async function enqueueAutoPdfRegenerationForSettingsChanges(input: {
     SETTINGS_INVALIDATION_KEYS.has(key),
   );
   if (!shouldRegenerate) return 0;
+
+  if (onlyInvalidatesTypstTheme(input.updatedSettingKeys)) {
+    const fingerprintContext = await resolvePdfFingerprintContext();
+    if (fingerprintContext.pdfRenderer !== "typst") return 0;
+  }
 
   return enqueueAutoPdfRegenerationForReadyJobs({
     reason: "settings_changed",

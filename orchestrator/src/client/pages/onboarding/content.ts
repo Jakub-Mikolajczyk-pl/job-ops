@@ -25,18 +25,12 @@ export const STEP_COPY: Record<
     eyebrow: "Step 2",
     title: "Import your current resume.",
     description:
-      "Choose how to bring your base resume into Job Ops. Upload a PDF or DOCX to create a local Design Resume, or connect Reactive Resume with a v5 API key and select an existing resume there.",
+      "Choose how to bring your base resume into Job Ops. Upload a PDF, DOCX, or Reactive Resume JSON to create a local Resume Studio document, or connect Reactive Resume with a v5 API key and select an existing resume there.",
   },
   searchterms: {
     eyebrow: "Step 3",
     title: "Choose the job titles to search for.",
     description:
       "Start from titles generated from your current resume, then edit the list so Job Ops searches for the roles you actually want next.",
-  },
-  basicauth: {
-    eyebrow: "Step 4",
-    title: "Secure your workspace",
-    description:
-      "Add a username and password so only signed-in users can access protected parts of Job Ops. You can always set this up later in Settings.",
   },
 };

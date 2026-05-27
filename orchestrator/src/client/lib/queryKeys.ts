@@ -46,6 +46,8 @@ export const queryKeys = {
 			[...queryKeys.jobs.all, "stage-events", id] as const,
 		tasks: (id: string) => [...queryKeys.jobs.all, "tasks", id] as const,
 		notes: (id: string) => [...queryKeys.jobs.all, "notes", id] as const,
+		documents: (id: string) =>
+			[...queryKeys.jobs.all, "documents", id] as const,
 		marketStats: () => [...queryKeys.jobs.all, "market-stats"] as const,
 		skillGap: (minScore = 60) =>
 			[...queryKeys.jobs.all, "skill-gap", { minScore }] as const,
@@ -91,6 +93,12 @@ export const queryKeys = {
 		runInsights: (id: string) =>
 			[...queryKeys.pipeline.all, "run-insights", id] as const,
 		health: () => [...queryKeys.pipeline.all, "health"] as const,
+	},
+	watchlist: {
+		all: ["watchlist"] as const,
+		sources: () => [...queryKeys.watchlist.all, "sources"] as const,
+		results: () => [...queryKeys.watchlist.all, "results"] as const,
+		states: () => [...queryKeys.watchlist.all, "states"] as const,
 	},
 	visaSponsors: {
 		all: ["visa-sponsors"] as const,

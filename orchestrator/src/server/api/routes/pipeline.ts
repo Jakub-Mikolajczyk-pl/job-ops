@@ -23,6 +23,7 @@ import {
   getProgress,
   requestPipelineCancel,
   resolvePipelineChallenge,
+  resumePipelineScoring,
   runPipeline,
   subscribeToProgress,
 } from "@server/pipeline/index";
@@ -52,6 +53,15 @@ import { z } from "zod";
 
 export const pipelineRouter = Router();
 const WORKPLACE_TYPE_VALUES = ["remote", "hybrid", "onsite"] as const;
+
+function toSelectedSourcesValue(
+  sources: readonly string[] | undefined,
+): string | undefined {
+  if (!Array.isArray(sources) || sources.length === 0) return undefined;
+  return [...sources]
+    .sort((left, right) => left.localeCompare(right))
+    .join("|");
+}
 
 function resolveRequestOrigin(req: Request): string | null {
   const configuredBaseUrl = process.env.JOBOPS_PUBLIC_BASE_URL?.trim();
@@ -274,6 +284,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
       const sourcePlans = planLocationSources({
         intent: locationIntent,
         sources: config.sources,
+        capabilitiesBySource: registry.locationCapabilitiesBySource ?? {},
       });
       if (sourcePlans.incompatibleSources.length > 0) {
         const incompatible = sourcePlans.plans
@@ -318,6 +329,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
       "jobs_pipeline_run_started",
       {
         source_count: config.sources?.length,
+        selected_sources: toSelectedSourcesValue(config.sources),
         top_n: config.topN,
         min_suitability_score: config.minSuitabilityScore,
         country: config.country,
@@ -375,6 +387,32 @@ pipelineRouter.post("/cancel", async (_req: Request, res: Response) => {
       pipelineRunId: cancelResult.pipelineRunId,
       alreadyRequested: cancelResult.alreadyRequested,
     });
+  } catch (error) {
+    fail(
+      res,
+      new AppError({
+        status: 500,
+        code: "INTERNAL_ERROR",
+        message: error instanceof Error ? error.message : "Unknown error",
+      }),
+    );
+  }
+});
+
+/**
+ * POST /api/pipeline/resume-scoring - Resume a pipeline paused because LLM
+ * was not configured. Called after the user configures an API key in Settings.
+ */
+pipelineRouter.post("/resume-scoring", async (_req: Request, res: Response) => {
+  try {
+    const { resolved } = resumePipelineScoring();
+    if (!resolved) {
+      return fail(
+        res,
+        conflict("Pipeline is not paused waiting for LLM configuration"),
+      );
+    }
+    ok(res, { resolved: true });
   } catch (error) {
     fail(
       res,

@@ -82,6 +82,8 @@ Open `http://localhost:3005` and follow the onboarding wizard. You'll be searchi
 | UK Visa Jobs | Sponsorship (UK) |
 | Golang Jobs | Go developers |
 | Seek | Australia/NZ (via Apify) |
+| WUZZUF | Egypt (Job Board) |
+| Khamsat | Egypt (Freelance) |
 
 Custom extractors can be added via TypeScript. See the [extractor docs](https://jobops.dakheera47.com/docs/extractors/overview).
 
@@ -104,6 +106,7 @@ JobOps works with the model provider you already use:
 
 - Codex (local app-server in Docker, authenticated with `codex login`)
 - OpenAI
+- GLM / Zhipu AI
 - Google Gemini
 - OpenRouter
 - Any OpenAI-compatible endpoint (Ollama, LM Studio, etc.)
@@ -149,6 +152,14 @@ Contributions are welcome. Whether it's code, docs, or new extractors, start wit
 <a href="https://github.com/DaKheera47/job-ops/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=DaKheera47/job-ops" />
 </a>
+
+---
+
+## Special Thanks
+
+Open-source tools and communities that make JobOps possible:
+
+- [jobspy](https://github.com/Bunsly/JobSpy) — Python-based multi-source job scraping library powering the jobspy extractor
 
 ---
 

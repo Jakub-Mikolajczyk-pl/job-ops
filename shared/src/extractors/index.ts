@@ -19,6 +19,8 @@ export const EXTRACTOR_SOURCE_IDS = [
   "bulldogjob",
   "pracujpl",
   "theprotocol",
+  "fiveamsat",
+  "wazzuf",
   "manual",
 ] as const;
 
@@ -94,6 +96,16 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     order: 108,
     category: "pipeline",
   },
+  justjoinit: {
+    label: "JustJoin.it",
+    order: 109,
+    category: "pipeline",
+  },
+  bulldogjob: {
+    label: "BulldogJob",
+    order: 110,
+    category: "pipeline",
+  },
   pracujpl: {
     label: "pracuj.pl",
     order: 111,
@@ -104,16 +116,8 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     order: 112,
     category: "pipeline",
   },
-  bulldogjob: {
-    label: "BulldogJob",
-    order: 110,
-    category: "pipeline",
-  },
-  justjoinit: {
-    label: "JustJoin.it",
-    order: 109,
-    category: "pipeline",
-  },
+  fiveamsat: { label: "Khamsat", order: 113, category: "pipeline" },
+  wazzuf: { label: "WUZZUF", order: 114, category: "pipeline" },
   manual: { label: "Manual", order: 120, category: "manual" },
 };
 

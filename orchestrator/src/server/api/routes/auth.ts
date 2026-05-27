@@ -3,6 +3,7 @@ import { asyncRoute, fail, ok } from "@infra/http";
 import { blacklistToken, signToken, verifyToken } from "@server/auth/jwt";
 import { verifyPassword } from "@server/auth/password";
 import { isDemoMode } from "@server/config/demo";
+import { getOrCreateAnalyticsInstallState } from "@server/repositories/product-analytics";
 import * as usersRepo from "@server/repositories/users";
 import type { Request, Response } from "express";
 import { Router } from "express";
@@ -17,6 +18,31 @@ const setupSchema = loginSchema.extend({
   password: z.string().min(8).max(500),
   displayName: z.string().trim().min(1).max(120).optional(),
 });
+
+function toSetupValidationMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  const path = issue?.path.join(".");
+
+  if (path === "password") {
+    if (issue?.code === "too_small") {
+      return `Password must be at least ${issue.minimum} characters.`;
+    }
+    if (issue?.code === "too_big") {
+      return `Password must be ${issue.maximum} characters or fewer.`;
+    }
+    return "Enter a valid password.";
+  }
+
+  if (path === "username") {
+    return "Enter a username.";
+  }
+
+  if (path === "displayName") {
+    return "Enter a name or leave the field blank.";
+  }
+
+  return "Invalid request body";
+}
 
 export const authRouter = Router();
 
@@ -107,7 +133,13 @@ authRouter.post(
 
     const parsed = setupSchema.safeParse(req.body);
     if (!parsed.success) {
-      fail(res, badRequest("Invalid request body", parsed.error.flatten()));
+      fail(
+        res,
+        badRequest(
+          toSetupValidationMessage(parsed.error),
+          parsed.error.flatten(),
+        ),
+      );
       return;
     }
 
@@ -148,7 +180,11 @@ authRouter.get(
       fail(res, unauthorized("Authentication required"));
       return;
     }
-    ok(res, { user });
+    const installState = await getOrCreateAnalyticsInstallState();
+    ok(res, {
+      user,
+      analyticsDistinctId: installState.distinctId,
+    });
   }),
 );
 

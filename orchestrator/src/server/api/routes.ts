@@ -24,7 +24,9 @@ import { skillExclusionsRouter } from "./routes/skill-exclusions";
 import { skillWatchlistRouter } from "./routes/skill-watchlist";
 import { tracerLinksRouter } from "./routes/tracer-links";
 import { visaSponsorsRouter } from "./routes/visa-sponsors";
+import { watchlistRouter } from "./routes/watchlist";
 import { webhookRouter } from "./routes/webhook";
+import { workdayRouter } from "./routes/workday";
 import { workspacesRouter } from "./routes/workspaces";
 
 export const apiRouter = Router();
@@ -51,4 +53,6 @@ apiRouter.use("/saved-searches", savedSearchesRouter);
 apiRouter.use("/skill-exclusions", skillExclusionsRouter);
 apiRouter.use("/skill-watchlist", skillWatchlistRouter);
 apiRouter.use("/active-employments", activeEmploymentsRouter);
+apiRouter.use("/workday", workdayRouter);
+apiRouter.use("/watchlist", watchlistRouter);
 apiRouter.use("/", extractorHealthRouter);
