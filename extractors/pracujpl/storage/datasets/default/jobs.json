@@ -1,6 +1,19 @@
 [
   {
     "source": "pracujpl",
+    "sourceJobId": "1004831166",
+    "title": "T Hub - Microsoft Dynamics 365 CE/ Power Platform Software Developer",
+    "employer": "T-Mobile",
+    "jobUrl": "https://www.pracuj.pl/praca/t-hub-microsoft-dynamics-365-ce-power-platform-software-developer-warszawa-marynarska-12,oferta,1004831166",
+    "applicationLink": "https://www.pracuj.pl/praca/t-hub-microsoft-dynamics-365-ce-power-platform-software-developer-warszawa-marynarska-12,oferta,1004831166",
+    "location": "Remote (Warszawa, Mokotów)",
+    "isRemote": true,
+    "datePosted": "2026-05-12",
+    "salary": "",
+    "skills": "Microsoft Power Platform, Dynamics 365 CE, Dataverse, JavaScript, TypeScript, C#, .NET, HTML, Microsoft Azure, REST APIs"
+  },
+  {
+    "source": "pracujpl",
     "sourceJobId": "1004773440",
     "title": "Power Platform Developer (k/m/n)",
     "employer": "UPVANTA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
@@ -8,7 +21,7 @@
     "applicationLink": "https://www.pracuj.pl/praca/power-platform-developer-k-m-n-wroclaw-legnicka-70,oferta,1004773440",
     "location": "Remote (Wrocław, Fabryczna)",
     "isRemote": true,
-    "datePosted": "2026-05-08",
+    "datePosted": "2026-05-12",
     "salary": "110–130 zł netto (+ VAT) / godz.",
     "skills": "Power Platform"
   },

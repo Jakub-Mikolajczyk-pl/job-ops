@@ -1,6 +1,31 @@
 [
   {
     "source": "theprotocol",
+    "sourceJobId": "dd0b0000-b652-1641-e735-08deb021cdbb",
+    "title": "T Hub - Microsoft Dynamics 365 CE/ Power Platform Software Developer",
+    "employer": "T-Mobile",
+    "jobUrl": "https://theprotocol.it/praca/t-hub---microsoft-dynamics-365-ce--power-platform-software-developer-warszawa-marynarska-12,oferta,dd0b0000-b652-1641-e735-08deb021cdbb",
+    "applicationLink": "https://theprotocol.it/praca/t-hub---microsoft-dynamics-365-ce--power-platform-software-developer-warszawa-marynarska-12,oferta,dd0b0000-b652-1641-e735-08deb021cdbb",
+    "location": "Remote (Warszawa)",
+    "isRemote": true,
+    "datePosted": "2026-05-12",
+    "skills": "Microsoft Power Platform, Dynamics 365 CE, Dataverse, JavaScript, TypeScript, C#, .NET, HTML, Microsoft Azure, REST APIs"
+  },
+  {
+    "source": "theprotocol",
+    "sourceJobId": "27c20000-b0d8-b6df-4ab9-08deaffc8f07",
+    "title": "Developer/ka Low Code",
+    "employer": "NASK",
+    "jobUrl": "https://theprotocol.it/praca/developer-ka-low-code-warszawa-stawki-40,oferta,27c20000-b0d8-b6df-4ab9-08deaffc8f07",
+    "applicationLink": "https://theprotocol.it/praca/developer-ka-low-code-warszawa-stawki-40,oferta,27c20000-b0d8-b6df-4ab9-08deaffc8f07",
+    "location": "Hybrid (Warszawa)",
+    "isRemote": false,
+    "datePosted": "2026-05-11",
+    "salary": "up to 10000 zł/mies.",
+    "skills": "N8N, Make, Zapier, PowerPlatform, JavaScript, TypeScript, Python"
+  },
+  {
+    "source": "theprotocol",
     "sourceJobId": "ac6c0000-e25b-7ec3-fbe4-08deac2bacf9",
     "title": "Senior Dynamics 365/Power Platform Developer",
     "employer": "Capgemini Polska",
@@ -108,41 +133,5 @@
     "isRemote": false,
     "datePosted": "2026-04-23",
     "skills": "C#, PowerShell, Azure Cloud, YAML, ARM, Bicep"
-  },
-  {
-    "source": "theprotocol",
-    "sourceJobId": "04a20000-854a-dee6-2614-08de9c54f762",
-    "title": "Senior Software Developer (Power Platform, Microsoft Copilot Studio, Azure)",
-    "employer": "Capgemini Polska",
-    "jobUrl": "https://theprotocol.it/praca/senior-software-developer-power-platform-microsoft-copilot-studio-azure-gdansk-aleja-grunwaldzka-472d,oferta,04a20000-854a-dee6-2614-08de9c54f762",
-    "applicationLink": "https://theprotocol.it/praca/senior-software-developer-power-platform-microsoft-copilot-studio-azure-gdansk-aleja-grunwaldzka-472d,oferta,04a20000-854a-dee6-2614-08de9c54f762",
-    "location": "Hybrid (Gdańsk, Katowice, Kraków)",
-    "isRemote": false,
-    "datePosted": "2026-04-17",
-    "skills": "Microsoft Copilot Studio, Power Automate, Power Apps, Dataverse, Azure AI Foundry, Azure AI Agent Service, Semantic Kernel, Microsoft Graph, Azure, AWS, GCP, DevOps"
-  },
-  {
-    "source": "theprotocol",
-    "sourceJobId": "5fe30000-9a1e-6607-1efb-08de9b89955c",
-    "title": "Fabric, Dynamics 365 Developer / Consultant​ (m/k/x*)​",
-    "employer": "Raben Management Services Sp. z o.o.",
-    "jobUrl": "https://theprotocol.it/praca/fabric-dynamics-365-developer---consultant-m-k-x-poznan-baraniaka-6,oferta,5fe30000-9a1e-6607-1efb-08de9b89955c",
-    "applicationLink": "https://theprotocol.it/praca/fabric-dynamics-365-developer---consultant-m-k-x-poznan-baraniaka-6,oferta,5fe30000-9a1e-6607-1efb-08de9b89955c",
-    "location": "Hybrid (Poznań)",
-    "isRemote": false,
-    "datePosted": "2026-04-16",
-    "skills": "Microsoft Dynamics 365, Power Platform, .NET, C#, Azure, REST API, JavaScript, SQL Server"
-  },
-  {
-    "source": "theprotocol",
-    "sourceJobId": "04a20000-854a-dee6-8142-08de9b3a846d",
-    "title": "Power Platform Developer",
-    "employer": "SOBOTA JACHIRA KANCELARIA PRAWNA SPÓŁKA KOMANDYTOWA",
-    "jobUrl": "https://theprotocol.it/praca/power-platform-developer-wroclaw,oferta,04a20000-854a-dee6-8142-08de9b3a846d",
-    "applicationLink": "https://theprotocol.it/praca/power-platform-developer-wroclaw,oferta,04a20000-854a-dee6-8142-08de9b3a846d",
-    "location": "Hybrid (Wrocław)",
-    "isRemote": false,
-    "datePosted": "2026-04-15",
-    "skills": "Microsoft Power Platform, Power Apps, Power Automate, Dataverse, Microsoft 365"
   }
 ]

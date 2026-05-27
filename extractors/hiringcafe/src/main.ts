@@ -49,12 +49,11 @@ interface ExtractedJob {
   jobType?: string;
 }
 
-interface BrowserApiResponse {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  data: unknown;
-  responseText: string;
+interface SsrPageResponse {
+  ssrHits: RawHiringCafeJob[];
+  ssrTotalCount: number;
+  ssrPage: number;
+  ssrIsLastPage: boolean;
 }
 
 interface CityLocationContext {
@@ -122,9 +121,7 @@ function parseWorkplaceTypes(
 }
 
 function encodeSearchState(searchState: unknown): string {
-  const json = JSON.stringify(searchState);
-  const urlEncodedJson = encodeURIComponent(json);
-  return Buffer.from(urlEncodedJson, "utf-8").toString("base64");
+  return encodeURIComponent(JSON.stringify(searchState));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -263,29 +260,7 @@ function mapHiringCafeJob(raw: RawHiringCafeJob): ExtractedJob | null {
   };
 }
 
-function extractResultsBatch(payload: unknown): RawHiringCafeJob[] {
-  if (Array.isArray(payload)) {
-    return payload.filter(
-      (item): item is RawHiringCafeJob =>
-        Boolean(item) && typeof item === "object" && !Array.isArray(item),
-    );
-  }
 
-  const payloadRecord = asRecord(payload);
-  const results = payloadRecord?.results;
-  if (!Array.isArray(results)) return [];
-
-  return results.filter(
-    (item): item is RawHiringCafeJob =>
-      Boolean(item) && typeof item === "object" && !Array.isArray(item),
-  );
-}
-
-function parseTotalCount(payload: unknown): number | null {
-  const payloadRecord = asRecord(payload);
-  if (!payloadRecord) return null;
-  return toNumberOrNull(payloadRecord.total);
-}
 
 function buildCityLocationId(input: string): string {
   const normalized = input.trim().toLowerCase().replace(/\s+/g, "_");
@@ -543,64 +518,68 @@ function createCitySearchState(args: {
   };
 }
 
-async function callHiringCafeApi(
-  page: Page,
-  endpoint: string,
-  params: Record<string, string>,
-): Promise<unknown> {
-  const response = await page.evaluate(
-    async ({ endpointArg, paramsArg }) => {
-      const url = new URL(endpointArg, window.location.origin);
-      for (const [key, value] of Object.entries(paramsArg)) {
-        url.searchParams.set(key, value);
-      }
+async function getBuildId(page: Page): Promise<string> {
+  const buildId = await page.evaluate(() => {
+    const el = document.getElementById("__NEXT_DATA__");
+    if (!el || !el.textContent) return null;
+    try {
+      return (JSON.parse(el.textContent) as Record<string, unknown>)
+        ?.buildId as string | null;
+    } catch {
+      return null;
+    }
+  });
+  if (!buildId) throw new Error("Could not extract buildId from __NEXT_DATA__");
+  return buildId;
+}
 
-      const res = await fetch(url.toString(), {
+async function fetchSsrPage(
+  page: Page,
+  buildId: string,
+  encodedSearchState: string,
+  pageNo: number,
+): Promise<SsrPageResponse> {
+  const result = await page.evaluate(
+    async ({ buildIdArg, encodedStateArg, pageNoArg }) => {
+      const url = `/_next/data/${buildIdArg}/index.json?searchState=${encodedStateArg}&page=${pageNoArg}`;
+      const res = await fetch(url, {
         method: "GET",
         credentials: "include",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-        },
+        headers: { Accept: "application/json" },
       });
 
-      const text = await res.text();
-      let data: unknown = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // Keep response text for diagnostics.
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `SSR page fetch failed (${res.status}): ${text.slice(0, 250)}`,
+        );
       }
 
-      const output: BrowserApiResponse = {
-        ok: res.ok,
-        status: res.status,
-        statusText: res.statusText,
-        data,
-        responseText: text,
+      const data = (await res.json()) as {
+        pageProps?: {
+          ssrHits?: unknown[];
+          ssrTotalCount?: number;
+          ssrPage?: number;
+          ssrIsLastPage?: boolean;
+        };
       };
 
-      return output;
+      const props = data?.pageProps ?? {};
+      return {
+        ssrHits: (props.ssrHits ?? []) as Record<string, unknown>[],
+        ssrTotalCount: props.ssrTotalCount ?? 0,
+        ssrPage: props.ssrPage ?? pageNoArg,
+        ssrIsLastPage: props.ssrIsLastPage ?? true,
+      };
     },
-    { endpointArg: endpoint, paramsArg: params },
+    {
+      buildIdArg: buildId,
+      encodedStateArg: encodedSearchState,
+      pageNoArg: pageNo,
+    },
   );
 
-  const result = response as BrowserApiResponse;
-
-  if (!result.ok) {
-    const snippet = result.responseText.slice(0, 250);
-    throw new Error(
-      `Hiring Cafe API ${endpoint} failed (${result.status} ${result.statusText}): ${snippet}`,
-    );
-  }
-
-  if (result.data === null) {
-    const snippet = result.responseText.slice(0, 250);
-    throw new Error(
-      `Hiring Cafe API ${endpoint} returned non-JSON response: ${snippet}`,
-    );
-  }
-
-  return result.data;
+  return result as SsrPageResponse;
 }
 
 async function run(): Promise<void> {
@@ -712,6 +691,8 @@ async function run(): Promise<void> {
       await initializePage();
     }
 
+    const buildId = await getBuildId(page);
+
     const countryLocation = resolveHiringCafeCountryLocation(country);
     const countryLong = countryLocation?.address_components[0]?.long_name ?? "";
     const countryShort =
@@ -751,45 +732,23 @@ async function run(): Promise<void> {
           });
       const encodedSearchState = encodeSearchState(searchState);
 
-      let totalAvailable: number | null = null;
-      try {
-        const countPayload = await callHiringCafeApi(
-          page,
-          "/api/search-jobs/get-total-count",
-          {
-            s: encodedSearchState,
-          },
-        );
-        totalAvailable = parseTotalCount(countPayload);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Hiring Cafe count request failed for term '${searchTerm}': ${message}`,
-        );
-      }
-
-      const termTarget =
-        totalAvailable !== null
-          ? Math.min(maxJobsPerTerm, totalAvailable)
-          : maxJobsPerTerm;
-
       let pageNo = 0;
       let termCollected = 0;
 
-      while (termCollected < termTarget && pageNo < PAGE_LIMIT) {
-        const size = Math.min(1000, termTarget - termCollected);
-        const jobsPayload = await callHiringCafeApi(page, "/api/search-jobs", {
-          size: String(size),
-          page: String(pageNo),
-          s: encodedSearchState,
-        });
+      while (termCollected < maxJobsPerTerm && pageNo < PAGE_LIMIT) {
+        const ssrPage = await fetchSsrPage(
+          page,
+          buildId,
+          encodedSearchState,
+          pageNo,
+        );
 
-        const batch = extractResultsBatch(jobsPayload);
+        const batch = ssrPage.ssrHits;
         if (batch.length === 0) break;
 
         let mappedOnPage = 0;
         for (const rawJob of batch) {
-          if (termCollected >= termTarget) break;
+          if (termCollected >= maxJobsPerTerm) break;
           const mapped = mapHiringCafeJob(rawJob);
           if (!mapped) continue;
 
@@ -812,7 +771,7 @@ async function run(): Promise<void> {
           totalCollected: termCollected,
         });
 
-        if (batch.length < size) break;
+        if (ssrPage.ssrIsLastPage) break;
         pageNo += 1;
       }
 
