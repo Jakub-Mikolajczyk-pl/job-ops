@@ -16,6 +16,7 @@ It controls:
 - job lifecycle states
 - manual and automatic ready flow
 - PDF generation and regeneration
+- first-class application packet generation
 - job-level titled markdown notes on the dedicated job page
 - handoff to post-application tracking
 
@@ -116,6 +117,24 @@ If a job does not have the first selected timestamp, JobOps falls back to the ne
 Ghostwriter is available in `discovered` and `ready` job views.
 
 For details, see [Ghostwriter](/docs/next/features/ghostwriter).
+
+### Application packets
+
+Application Packet is available from the job page actions for `discovered` and
+`ready` jobs.
+
+Use it when you want JobOps to produce the materials around the resume, not just
+the resume PDF itself. The action runs a draft-and-review AI pass and saves:
+
+- `application-cover-letter.md`
+- `application-review.md`
+- `application-interview-prep.md`
+- an `Application Packet` job note with the fit summary and checklist
+
+The packet uses the current job description, fit score/reason, tailored resume
+fields, local profile context, and writing-style settings. It stores the output
+as job documents so Ghostwriter can use those materials as selectable context
+later.
 
 ### Job notes
 
