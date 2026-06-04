@@ -36,7 +36,6 @@ import {
   useGenerateJobPdfMutation,
   useMarkAsAppliedMutation,
   useRescoreJobMutation,
-  useSkipJobMutation,
   useUpdateJobMutation,
 } from "@/client/hooks/queries/useJobMutations";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
@@ -66,13 +65,13 @@ import {
 } from "@/lib/utils";
 import * as api from "../api";
 import { ConfirmDelete } from "../components/ConfirmDelete";
-import { SkipReasonModal } from "../components/SkipReasonModal";
 import { GhostwriterPanel } from "../components/ghostwriter/GhostwriterPanel";
 import { JobDetailsEditDrawer } from "../components/JobDetailsEditDrawer";
 import {
   type LogEventFormValues,
   LogEventModal,
 } from "../components/LogEventModal";
+import { SkipReasonModal } from "../components/SkipReasonModal";
 import { getDeleteEventDescription } from "./job/deleteEventDescription";
 import { JobTimeline } from "./job/Timeline";
 import { JobDocumentsPanel } from "./job-page/JobDocumentsPanel";
@@ -191,7 +190,6 @@ export const JobPage: React.FC = () => {
 
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const updateJobMutation = useUpdateJobMutation();
-  const skipJobMutation = useSkipJobMutation();
   const rescoreJobMutation = useRescoreJobMutation();
   const generatePdfMutation = useGenerateJobPdfMutation();
   const checkSponsorMutation = useCheckSponsorMutation();
@@ -408,8 +406,30 @@ export const JobPage: React.FC = () => {
     await runAction("interview-prep", async () => {
       if (!job) return;
       await api.generateInterviewPrep(job.id);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.notes(job.id) });
-      toast.success("Interview prep generated", { description: "Check the Notes section." });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.jobs.notes(job.id),
+      });
+      toast.success("Interview prep generated", {
+        description: "Check the Notes section.",
+      });
+    });
+  };
+
+  const handleApplicationPacket = async () => {
+    await runAction("application-packet", async () => {
+      if (!job) return;
+      await api.generateApplicationPacket(job.id);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.jobs.notes(job.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.jobs.documents(job.id),
+        }),
+      ]);
+      toast.success("Application packet generated", {
+        description: "Cover letter, review, and prep were saved to Documents.",
+      });
     });
   };
 
@@ -922,6 +942,7 @@ export const JobPage: React.FC = () => {
               onRescore={() => void handleRescore()}
               onCheckSponsor={() => void handleCheckSponsor()}
               onInterviewPrep={() => void handleInterviewPrep()}
+              onApplicationPacket={() => void handleApplicationPacket()}
             />
           )}
         </div>

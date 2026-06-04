@@ -1,9 +1,10 @@
-import { AppError, badRequest } from "@infra/errors";
+import { AppError, badRequest, notFound, upstreamError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
 import { resolveRequestOrigin } from "@server/infra/request-origin";
 import * as jobsRepo from "@server/repositories/jobs";
+import { generateAndStoreApplicationPacket } from "@server/services/application-packet";
 import { generateInterviewPrep } from "@server/services/interview-prep";
 import {
   buildJobActionExecutionOptions,
@@ -311,30 +312,97 @@ jobsActionsRouter.post("/:id/skip", async (req: Request, res: Response) => {
   ok(res, await hydrateJobPdfFreshness(result.job));
 });
 
-jobsActionsRouter.post("/:id/interview-prep", async (req: Request, res: Response) => {
-  try {
-    const job = await jobsRepo.getJobById(req.params.id);
-    if (!job) return fail(res, { status: 404, code: "NOT_FOUND", message: "Job not found" });
+jobsActionsRouter.post(
+  "/:id/interview-prep",
+  async (req: Request, res: Response) => {
+    try {
+      const job = await jobsRepo.getJobById(req.params.id);
+      if (!job) return fail(res, notFound("Job not found"));
 
-    const result = await generateInterviewPrep(job);
-    if (!result.success) {
-      return fail(res, { status: 500, code: "LLM_ERROR", message: result.error ?? "LLM call failed" });
+      const result = await generateInterviewPrep(job);
+      if (!result.success) {
+        return fail(
+          res,
+          upstreamError(result.error ?? "Interview prep generation failed"),
+        );
+      }
+      const content = result.markdown?.trim();
+      if (!content) {
+        return fail(res, upstreamError("Interview prep generation was empty"));
+      }
+
+      const note = await jobsRepo.createJobNote({
+        jobId: job.id,
+        title: "Interview Prep",
+        content,
+      });
+
+      ok(res, note);
+    } catch (error) {
+      fail(
+        res,
+        error instanceof AppError
+          ? error
+          : new AppError({
+              status: 500,
+              code: "INTERNAL_ERROR",
+              message: error instanceof Error ? error.message : String(error),
+            }),
+      );
     }
+  },
+);
 
-    const note = await jobsRepo.createJobNote({
-      jobId: job.id,
-      title: "Interview Prep",
-      content: result.markdown!,
-    });
+jobsActionsRouter.post(
+  "/:id/application-packet",
+  async (req: Request, res: Response) => {
+    try {
+      const job = await jobsRepo.getJobById(req.params.id);
+      if (!job) {
+        return fail(res, notFound("Job not found"));
+      }
 
-    ok(res, note);
-  } catch (error) {
-    fail(res, { status: 500, code: "INTERNAL_ERROR", message: String(error) });
-  }
-});
+      const result = await generateAndStoreApplicationPacket(job);
+      if (!result.success) {
+        return fail(
+          res,
+          upstreamError(
+            result.error || "Failed to generate application packet",
+          ),
+        );
+      }
 
-jobsActionsRouter.post("/:id/rescore"
-, async (req: Request, res: Response) => {
+      logger.info("Application packet generated", {
+        route: "POST /api/jobs/:id/application-packet",
+        jobId: job.id,
+        coverLetterDocumentId: result.data.documents.coverLetter.id,
+        reviewDocumentId: result.data.documents.review.id,
+        interviewPrepDocumentId: result.data.documents.interviewPrep.id,
+        noteId: result.data.note.id,
+      });
+
+      ok(res, result.data, 201);
+    } catch (error) {
+      const err =
+        error instanceof AppError
+          ? error
+          : new AppError({
+              status: 500,
+              code: "INTERNAL_ERROR",
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+      logger.error("Application packet generation failed", {
+        route: "POST /api/jobs/:id/application-packet",
+        jobId: req.params.id,
+        status: err.status,
+        code: err.code,
+      });
+      fail(res, err);
+    }
+  },
+);
+
+jobsActionsRouter.post("/:id/rescore", async (req: Request, res: Response) => {
   const result = await executeJobActionForJob(
     "rescore",
     req.params.id,

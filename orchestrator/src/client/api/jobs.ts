@@ -1,4 +1,5 @@
 import type {
+	ApplicationPacketResponse,
 	ApplicationStage,
 	ApplicationTask,
 	Job,
@@ -595,6 +596,15 @@ export async function generateInterviewPrep(
 ): Promise<import("@shared/types").JobNote> {
 	return fetchApi<import("@shared/types").JobNote>(
 		`/jobs/${jobId}/interview-prep`,
+		{ method: "POST" },
+	);
+}
+
+export async function generateApplicationPacket(
+	jobId: string,
+): Promise<ApplicationPacketResponse> {
+	return fetchApi<ApplicationPacketResponse>(
+		`/jobs/${jobId}/application-packet`,
 		{ method: "POST" },
 	);
 }

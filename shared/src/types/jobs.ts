@@ -141,6 +141,15 @@ export interface JobDocument {
 	updatedAt: string;
 }
 
+export interface ApplicationPacketResponse {
+	note: JobNote;
+	documents: {
+		coverLetter: JobDocument;
+		review: JobDocument;
+		interviewPrep: JobDocument;
+	};
+}
+
 export type JobSource = ExtractorSourceId | (string & {});
 
 export type JobPdfSource = "generated" | "uploaded";

@@ -69,6 +69,8 @@ function renderRightSidebar(overrides: Parameters<typeof createJob>[0] = {}) {
       onCopyJobInfo={noop}
       onRescore={noop}
       onCheckSponsor={noop}
+      onInterviewPrep={noop}
+      onApplicationPacket={noop}
     />,
   );
 }
@@ -98,6 +100,14 @@ describe("JobPageRightSidebar actions", () => {
     expect(
       screen.getByRole("button", { name: /download old pdf/i }),
     ).toBeInTheDocument();
+  });
+
+  it("offers first-class application packet generation for ready jobs", () => {
+    renderRightSidebar();
+
+    expect(
+      screen.getAllByRole("button", { name: /application packet/i }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("uses upload wording when the job has no resume PDF", () => {
