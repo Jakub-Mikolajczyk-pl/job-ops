@@ -53,6 +53,36 @@ describe("extractor deployment config", () => {
     );
   });
 
+  it("does not install a vanilla Node Playwright Firefox binary", async () => {
+    // Camoufox is the only supported browser in production. The vanilla Firefox
+    // fallback was removed so that a missing Camoufox binary surfaces as a hard
+    // failure rather than silently degrading anti-detection. Keeping this
+    // assertion prevents the fallback from being accidentally reintroduced.
+    const dockerfile = await readFile(resolve(process.cwd(), "../Dockerfile"), {
+      encoding: "utf8",
+    });
+
+    expect(dockerfile).not.toContain(
+      "./node_modules/.bin/playwright install firefox",
+    );
+  });
+
+  it("bakes Camoufox GeoLite data during Docker builds", async () => {
+    const dockerfile = await readFile(resolve(process.cwd(), "../Dockerfile"), {
+      encoding: "utf8",
+    });
+    const fetchScript = await readFile(
+      resolve(process.cwd(), "../scripts/camoufox-fetch.mjs"),
+      { encoding: "utf8" },
+    );
+
+    expect(dockerfile).toContain("node ./scripts/camoufox-fetch.mjs");
+    expect(fetchScript).toContain(
+      'import { downloadMMDB } from "camoufox-js/dist/locale.js";',
+    );
+    expect(fetchScript).toContain("await downloadMMDB();");
+  });
+
   it("syncs the Naukri extractor in compose development mode", async () => {
     const composeFile = await readFile(
       resolve(process.cwd(), "../docker-compose.yml"),

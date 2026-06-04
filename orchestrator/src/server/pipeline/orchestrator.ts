@@ -215,6 +215,23 @@ function ensureNotCancelled(tenantId = getActiveTenantId()): void {
 	}
 }
 
+function buildRepeatedChallengeMessage(args: {
+  challenges: PendingChallenge[];
+  sourceErrors: string[];
+}): string {
+  const extractorNames =
+    args.challenges
+      .map((challenge) => challenge.extractorName || challenge.extractorId)
+      .filter(Boolean)
+      .join(", ") || "One or more extractors";
+  const sourceDetails =
+    args.sourceErrors.length > 0
+      ? ` Details: ${args.sourceErrors.join("; ")}`
+      : "";
+
+  return `${extractorNames} still returned a Cloudflare challenge after the solve step, so the pipeline stopped instead of completing with zero jobs.${sourceDetails}`;
+}
+
 /**
  * Run the full job discovery and processing pipeline.
  */
@@ -366,19 +383,26 @@ export async function runPipeline(
 					sourceErrors = [...sourceErrors, ...retryResult.sourceErrors];
 					pendingChallenges = retryResult.pendingChallenges;
 
-					// If the retry itself hits challenges again (e.g. cookie expired
-					// between solve and retry), we don't loop — just continue with whatever
-					// the first run discovered.  The user will see partial results and can
-					// re-run the pipeline.
+					// If the retry itself hits challenges again (e.g. no reusable cookie was
+					// persisted, or the cookie was rejected), keep partial results only when
+					// something useful was discovered. Otherwise stop loudly instead of
+					// presenting a successful zero-job run.
 					if (retryResult.pendingChallenges.length > 0) {
-						pipelineLogger.warn(
-							"Retry after challenge still has challenges — continuing with partial results",
-							{
-								retryPendingChallenges: retryResult.pendingChallenges.map(
-									(c) => c.extractorId,
-								),
-							},
-						);
+						const message = buildRepeatedChallengeMessage({
+							challenges: retryResult.pendingChallenges,
+							sourceErrors: retryResult.sourceErrors,
+						});
+
+						if (discoveredJobs.length === 0) {
+							throw new Error(message);
+						}
+
+						pipelineLogger.warn(message, {
+							retryPendingChallenges: retryResult.pendingChallenges.map(
+								(c) => c.extractorId,
+							),
+							retrySourceErrors: retryResult.sourceErrors,
+						});
 					}
 				} catch (retryError) {
 					// The retried sources all failed (e.g. 401 after cookie expiry).
@@ -402,8 +426,8 @@ export async function runPipeline(
 
 			ensureNotCancelled(tenantId);
 			const importStartIso = new Date().toISOString();
-			const { created } = await importJobsStep({ discoveredJobs });
-			jobsDiscovered = created;
+			const { created, skipped } = await importJobsStep({ discoveredJobs });
+			jobsDiscovered = discoveredJobs.length;
 
 			await persistResultSummary({ stage: "import" });
 			await pipelineRepo.updatePipelineRun(pipelineRun.id, {
@@ -498,9 +522,11 @@ export async function runPipeline(
 				resultSummary,
 			});
 
-			progressHelpers.complete(created, processedCount);
+			progressHelpers.complete(jobsDiscovered, processedCount);
 			pipelineLogger.info("Pipeline run completed", {
-				jobsDiscovered: created,
+				jobsDiscovered,
+				jobsImported: created,
+				jobsSkipped: skipped,
 				jobsProcessed: processedCount,
 			});
 
@@ -515,14 +541,14 @@ export async function runPipeline(
 
 			await notifyPipelineWebhookStep("pipeline.completed", {
 				pipelineRunId: pipelineRun.id,
-				jobsDiscovered: created,
+				jobsDiscovered,
 				jobsScored: unprocessedJobs.length,
 				jobsProcessed: processedCount,
 			});
 
 			return {
 				success: true,
-				jobsDiscovered: created,
+				jobsDiscovered,
 				jobsProcessed: processedCount,
 			};
 		} catch (error) {

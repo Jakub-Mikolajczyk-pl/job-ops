@@ -90,6 +90,7 @@ export const queryKeys = {
 		all: ["pipeline"] as const,
 		status: () => [...queryKeys.pipeline.all, "status"] as const,
 		runs: () => [...queryKeys.pipeline.all, "runs"] as const,
+		searchPresets: () => [...queryKeys.pipeline.all, "search-presets"] as const,
 		runInsights: (id: string) =>
 			[...queryKeys.pipeline.all, "run-insights", id] as const,
 		health: () => [...queryKeys.pipeline.all, "health"] as const,
