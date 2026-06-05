@@ -181,6 +181,13 @@ export function createAuthGuard() {
       normalizedPath === "/api/webhook/trigger"
     )
       return Boolean(process.env.WEBHOOK_SECRET?.trim());
+    // Telegram "JobOps Inbox" webhook: public only when a secret is configured
+    // (the route itself verifies the X-Telegram-Bot-Api-Secret-Token header).
+    if (
+      normalizedMethod === "POST" &&
+      normalizedPath === "/api/ingest/telegram"
+    )
+      return Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim());
 
     // Auth endpoints must be accessible without existing auth.
     if (
