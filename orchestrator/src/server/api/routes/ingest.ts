@@ -7,10 +7,14 @@
  */
 
 import { createHash } from "node:crypto";
-import { badRequest } from "@infra/errors";
+import { AppError, badRequest } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import * as intakeRepo from "@server/repositories/recruitmentIntake";
+import {
+	processIntake,
+	processPending,
+} from "@server/services/recruitment-intake";
 import {
 	RECRUITMENT_INTAKE_KINDS,
 	RECRUITMENT_INTAKE_SOURCES,
@@ -76,10 +80,51 @@ ingestRouter.post("/", async (req: Request, res: Response) => {
 			return ok(res, { intakeId: existing.id, deduped: true });
 		}
 		logger.error(`ingest failed (${source}/${kind}): ${String(error)}`);
-		return fail(res, {
-			status: 500,
-			code: "INTERNAL_ERROR",
-			message: "Failed to record intake",
-		});
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to record intake",
+			}),
+		);
+	}
+});
+
+// Drain all pending intake rows through the extraction worker (R2).
+ingestRouter.post("/process-pending", async (_req: Request, res: Response) => {
+	try {
+		const results = await processPending();
+		return ok(res, { processed: results.length, results });
+	} catch (error) {
+		logger.error(`process-pending failed: ${String(error)}`);
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to process pending intake",
+			}),
+		);
+	}
+});
+
+// Process a single intake row by id (manual trigger).
+ingestRouter.post("/:id/process", async (req: Request, res: Response) => {
+	const id = req.params.id;
+	if (!id) return fail(res, badRequest("Missing intake id"));
+	try {
+		const result = await processIntake(id);
+		return ok(res, result);
+	} catch (error) {
+		logger.error(`process intake failed (${id}): ${String(error)}`);
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to process intake",
+			}),
+		);
 	}
 });

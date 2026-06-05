@@ -26,6 +26,16 @@ export interface InsertIntakeInput {
 	meta?: Record<string, unknown> | null;
 }
 
+export async function getById(id: string): Promise<RawIntakeRow | undefined> {
+	const tenantId = getActiveTenantId();
+	const rows = await db
+		.select()
+		.from(rawIntake)
+		.where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)))
+		.limit(1);
+	return rows[0];
+}
+
 export async function findByHash(
 	contentHash: string,
 ): Promise<RawIntakeRow | undefined> {
