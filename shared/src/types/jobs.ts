@@ -80,6 +80,43 @@ export const INTERVIEW_OUTCOMES = [
 
 export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
 
+// --- Recruitment intake (inbound recruiters → ingest pipeline). See RECRUITMENT_TASKS.md. ---
+
+export const RECRUITMENT_INTAKE_SOURCES = [
+	"telegram",
+	"folder",
+	"hidock",
+	"notion_migration",
+	"manual",
+] as const;
+
+export type RecruitmentIntakeSource =
+	(typeof RECRUITMENT_INTAKE_SOURCES)[number];
+
+export const RECRUITMENT_INTAKE_KINDS = [
+	"linkedin_msg",
+	"recruiter_email",
+	"call_transcript",
+	"job_post",
+	"note",
+] as const;
+
+export type RecruitmentIntakeKind = (typeof RECRUITMENT_INTAKE_KINDS)[number];
+
+export const RECRUITMENT_INTAKE_STATUSES = [
+	"pending",
+	"processed",
+	"error",
+	"needs_review",
+] as const;
+
+export type RecruitmentIntakeStatus =
+	(typeof RECRUITMENT_INTAKE_STATUSES)[number];
+
+export const STUDY_TOPIC_PRIORITIES = ["high", "medium", "low"] as const;
+
+export type StudyTopicPriority = (typeof STUDY_TOPIC_PRIORITIES)[number];
+
 export interface StageEventMetadata {
 	note?: string | null;
 	actor?: "system" | "user";

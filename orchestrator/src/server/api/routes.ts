@@ -11,6 +11,7 @@ import { demoRouter } from "./routes/demo";
 import { designResumeRouter } from "./routes/design-resume";
 import { extractorHealthRouter } from "./routes/extractor-health";
 import { ghostwriterRouter } from "./routes/ghostwriter";
+import { ingestRouter } from "./routes/ingest";
 import { jobsRouter } from "./routes/jobs";
 import { manualJobsRouter } from "./routes/manual-jobs";
 import { onboardingRouter } from "./routes/onboarding";
@@ -33,6 +34,7 @@ export const apiRouter = Router();
 
 apiRouter.use("/jobs", jobsRouter);
 apiRouter.use("/jobs/:id/chat", ghostwriterRouter);
+apiRouter.use("/ingest", ingestRouter);
 apiRouter.use("/demo", demoRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/pipeline", pipelineRouter);

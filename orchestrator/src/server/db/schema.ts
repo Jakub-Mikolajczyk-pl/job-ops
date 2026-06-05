@@ -17,6 +17,10 @@ import {
 	POST_APPLICATION_PROVIDERS,
 	POST_APPLICATION_RELEVANCE_DECISIONS,
 	POST_APPLICATION_SYNC_RUN_STATUSES,
+	RECRUITMENT_INTAKE_KINDS,
+	RECRUITMENT_INTAKE_SOURCES,
+	RECRUITMENT_INTAKE_STATUSES,
+	STUDY_TOPIC_PRIORITIES,
 } from "@shared/types";
 import { sql } from "drizzle-orm";
 import {
@@ -1116,3 +1120,90 @@ export type ProfileMarketSnapshotRow =
 	typeof profileMarketSnapshots.$inferSelect;
 export type NewProfileMarketSnapshotRow =
 	typeof profileMarketSnapshots.$inferInsert;
+
+// --- Recruitment intake pipeline (inbound recruiters). See RECRUITMENT_TASKS.md R1/R2. ---
+
+export const rawIntake = sqliteTable(
+	"raw_intake",
+	{
+		id: text("id").primaryKey(),
+		tenantId: text("tenant_id")
+			.notNull()
+			.default("tenant_default")
+			.references(() => tenants.id, { onDelete: "cascade" }),
+		source: text("source", { enum: RECRUITMENT_INTAKE_SOURCES }).notNull(),
+		kind: text("kind", { enum: RECRUITMENT_INTAKE_KINDS }).notNull(),
+		rawText: text("raw_text").notNull(),
+		contentHash: text("content_hash").notNull(),
+		meta: text("meta", { mode: "json" }),
+		status: text("status", { enum: RECRUITMENT_INTAKE_STATUSES })
+			.notNull()
+			.default("pending"),
+		errorMessage: text("error_message"),
+		jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
+		createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+		processedAt: text("processed_at"),
+	},
+	(table) => ({
+		tenantHashUnique: uniqueIndex("idx_raw_intake_tenant_hash").on(
+			table.tenantId,
+			table.contentHash,
+		),
+		tenantStatusIndex: index("idx_raw_intake_tenant_status").on(
+			table.tenantId,
+			table.status,
+		),
+	}),
+);
+
+export type RawIntakeRow = typeof rawIntake.$inferSelect;
+export type NewRawIntakeRow = typeof rawIntake.$inferInsert;
+
+export const interviewStudyTopics = sqliteTable(
+	"interview_study_topics",
+	{
+		id: text("id").primaryKey(),
+		tenantId: text("tenant_id")
+			.notNull()
+			.default("tenant_default")
+			.references(() => tenants.id, { onDelete: "cascade" }),
+		applicationId: text("application_id")
+			.notNull()
+			.references(() => jobs.id, { onDelete: "cascade" }),
+		interviewId: text("interview_id").references(() => interviews.id, {
+			onDelete: "set null",
+		}),
+		company: text("company"),
+		role: text("role"),
+		topicsJson: text("topics_json", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		hesitationsJson: text("hesitations_json", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		conceptsJson: text("concepts_json", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		priority: text("priority", { enum: STUDY_TOPIC_PRIORITIES })
+			.notNull()
+			.default("medium"),
+		exportedToRekru: integer("exported_to_rekru", { mode: "boolean" })
+			.notNull()
+			.default(false),
+		createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+	},
+	(table) => ({
+		applicationIndex: index("idx_interview_study_topics_application").on(
+			table.applicationId,
+		),
+		exportPendingIndex: index("idx_interview_study_topics_export").on(
+			table.tenantId,
+			table.exportedToRekru,
+		),
+	}),
+);
+
+export type InterviewStudyTopicRow =
+	typeof interviewStudyTopics.$inferSelect;
+export type NewInterviewStudyTopicRow =
+	typeof interviewStudyTopics.$inferInsert;

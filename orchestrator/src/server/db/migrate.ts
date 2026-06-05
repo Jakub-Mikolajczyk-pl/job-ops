@@ -501,6 +501,54 @@ const migrations = [
     FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE CASCADE
   )`,
 
+	// --- Recruitment intake pipeline (see RECRUITMENT_TASKS.md R1/R2) ---
+	`CREATE TABLE IF NOT EXISTS raw_intake (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+    source TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    raw_text TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    meta TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    job_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+  )`,
+
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_intake_tenant_hash
+    ON raw_intake(tenant_id, content_hash)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_raw_intake_tenant_status
+    ON raw_intake(tenant_id, status)`,
+
+	`CREATE TABLE IF NOT EXISTS interview_study_topics (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+    application_id TEXT NOT NULL,
+    interview_id TEXT,
+    company TEXT,
+    role TEXT,
+    topics_json TEXT NOT NULL DEFAULT '[]',
+    hesitations_json TEXT NOT NULL DEFAULT '[]',
+    concepts_json TEXT NOT NULL DEFAULT '[]',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    exported_to_rekru INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE CASCADE,
+    FOREIGN KEY (interview_id) REFERENCES interviews(id) ON DELETE SET NULL
+  )`,
+
+	`CREATE INDEX IF NOT EXISTS idx_interview_study_topics_application
+    ON interview_study_topics(application_id)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_interview_study_topics_export
+    ON interview_study_topics(tenant_id, exported_to_rekru)`,
+
 	`CREATE TABLE IF NOT EXISTS post_application_integrations (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
