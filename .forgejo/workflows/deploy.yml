@@ -1,0 +1,35 @@
+name: Deploy to CT104
+
+# Build-on-target deploy (faithful to the prior manual flow): the host runner
+# SSHes into CT104, where a command-restricted key runs /opt/deploy-jobops.sh.
+# That script does: git reset --hard forgejo/main -> docker compose build ->
+# restart both instances (jobops-mine :3005 + jobops-wife :3006).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: 192.168.100.154
+  DEPLOY_USER: root
+
+jobs:
+  deploy:
+    name: Build on CT104 and restart both instances
+    runs-on: host
+    steps:
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.CT104_DEPLOY_KEY }}" > ~/.ssh/ct104_deploy
+          chmod 600 ~/.ssh/ct104_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Trigger deploy on CT104
+        run: |
+          ssh -i ~/.ssh/ct104_deploy \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$DEPLOY_USER@$DEPLOY_HOST" deploy
+          echo "Deploy command dispatched. Build log on CT104: /var/log/deploy-jobops.log"
