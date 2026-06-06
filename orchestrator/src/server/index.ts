@@ -19,6 +19,7 @@ import { attachChallengeViewerUpgradeProxy } from "./services/challenge-viewer";
 import { initializeDemoModeServices } from "./services/demo-mode";
 import { applyStoredEnvOverrides } from "./services/envSettings";
 import { initializeHistoricalServerEventReplaySafely } from "./services/historical-product-analytics";
+import { startNudgeScheduler } from "./services/nudge-telegram";
 import { initialize as initializeVisaSponsors } from "./services/visa-sponsors/index";
 
 const AUTH_SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -153,6 +154,14 @@ async function startServer() {
 
     void initializeHistoricalServerEventReplaySafely();
     void initializeActivationAnalyticsSafely();
+
+    try {
+      startNudgeScheduler();
+    } catch (error) {
+      logger.warn("Failed to start recruitment nudge scheduler", {
+        error: sanitizeUnknown(error),
+      });
+    }
   });
   attachChallengeViewerUpgradeProxy(server);
 }
