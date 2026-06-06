@@ -6,76 +6,76 @@ export type { LocationEvidenceQuality } from "./location";
 export type JobLocationEvidence = LocationEvidence;
 
 export type JobStatus =
-	| "discovered" // Crawled but not processed
-	| "processing" // Currently generating resume
-	| "ready" // PDF generated, waiting for user to apply
-	| "applied" // Application sent
-	| "in_progress" // In process beyond initial application
-	| "skipped" // User skipped this job
-	| "expired"; // Deadline passed
+  | "discovered" // Crawled but not processed
+  | "processing" // Currently generating resume
+  | "ready" // PDF generated, waiting for user to apply
+  | "applied" // Application sent
+  | "in_progress" // In process beyond initial application
+  | "skipped" // User skipped this job
+  | "expired"; // Deadline passed
 
 export const APPLICATION_STAGES = [
-	"applied",
-	"recruiter_screen",
-	"assessment",
-	"hiring_manager_screen",
-	"technical_interview",
-	"onsite",
-	"offer",
-	"closed",
+  "applied",
+  "recruiter_screen",
+  "assessment",
+  "hiring_manager_screen",
+  "technical_interview",
+  "onsite",
+  "offer",
+  "closed",
 ] as const;
 
 export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
 
 export const STAGE_LABELS: Record<ApplicationStage, string> = {
-	applied: "Applied",
-	recruiter_screen: "Recruiter Screen",
-	assessment: "Assessment",
-	hiring_manager_screen: "Team Match",
-	technical_interview: "Technical Interview",
-	onsite: "Final Round",
-	offer: "Offer",
-	closed: "Closed",
+  applied: "Applied",
+  recruiter_screen: "Recruiter Screen",
+  assessment: "Assessment",
+  hiring_manager_screen: "Team Match",
+  technical_interview: "Technical Interview",
+  onsite: "Final Round",
+  offer: "Offer",
+  closed: "Closed",
 };
 
 export type StageTransitionTarget = ApplicationStage | "no_change";
 
 export const APPLICATION_OUTCOMES = [
-	"offer_accepted",
-	"offer_declined",
-	"rejected",
-	"withdrawn",
-	"no_response",
-	"ghosted",
+  "offer_accepted",
+  "offer_declined",
+  "rejected",
+  "withdrawn",
+  "no_response",
+  "ghosted",
 ] as const;
 
 export type JobOutcome = (typeof APPLICATION_OUTCOMES)[number];
 
 export const APPLICATION_TASK_TYPES = [
-	"prep",
-	"todo",
-	"follow_up",
-	"check_status",
+  "prep",
+  "todo",
+  "follow_up",
+  "check_status",
 ] as const;
 
 export type ApplicationTaskType = (typeof APPLICATION_TASK_TYPES)[number];
 
 export const INTERVIEW_TYPES = [
-	"recruiter_screen",
-	"technical",
-	"onsite",
-	"panel",
-	"behavioral",
-	"final",
+  "recruiter_screen",
+  "technical",
+  "onsite",
+  "panel",
+  "behavioral",
+  "final",
 ] as const;
 
 export type InterviewType = (typeof INTERVIEW_TYPES)[number];
 
 export const INTERVIEW_OUTCOMES = [
-	"pass",
-	"fail",
-	"pending",
-	"cancelled",
+  "pass",
+  "fail",
+  "pending",
+  "cancelled",
 ] as const;
 
 export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
@@ -83,612 +83,644 @@ export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
 // --- Recruitment intake (inbound recruiters → ingest pipeline). See RECRUITMENT_TASKS.md. ---
 
 export const RECRUITMENT_INTAKE_SOURCES = [
-	"telegram",
-	"folder",
-	"hidock",
-	"notion_migration",
-	"manual",
+  "telegram",
+  "folder",
+  "hidock",
+  "notion_migration",
+  "manual",
 ] as const;
 
 export type RecruitmentIntakeSource =
-	(typeof RECRUITMENT_INTAKE_SOURCES)[number];
+  (typeof RECRUITMENT_INTAKE_SOURCES)[number];
 
 export const RECRUITMENT_INTAKE_KINDS = [
-	"linkedin_msg",
-	"recruiter_email",
-	"call_transcript",
-	"job_post",
-	"note",
+  "linkedin_msg",
+  "recruiter_email",
+  "call_transcript",
+  "job_post",
+  "note",
 ] as const;
 
 export type RecruitmentIntakeKind = (typeof RECRUITMENT_INTAKE_KINDS)[number];
 
 export const RECRUITMENT_INTAKE_STATUSES = [
-	"pending",
-	"processed",
-	"error",
-	"needs_review",
+  "pending",
+  "processed",
+  "error",
+  "needs_review",
 ] as const;
 
 export type RecruitmentIntakeStatus =
-	(typeof RECRUITMENT_INTAKE_STATUSES)[number];
+  (typeof RECRUITMENT_INTAKE_STATUSES)[number];
 
 export const STUDY_TOPIC_PRIORITIES = ["high", "medium", "low"] as const;
 
 export type StudyTopicPriority = (typeof STUDY_TOPIC_PRIORITIES)[number];
 
 export interface StageEventMetadata {
-	note?: string | null;
-	actor?: "system" | "user";
-	groupId?: string | null;
-	groupLabel?: string | null;
-	eventLabel?: string | null;
-	externalUrl?: string | null;
-	reasonCode?: string | null;
-	eventType?: "interview_log" | "status_update" | "note" | null;
+  note?: string | null;
+  actor?: "system" | "user";
+  groupId?: string | null;
+  groupLabel?: string | null;
+  eventLabel?: string | null;
+  externalUrl?: string | null;
+  reasonCode?: string | null;
+  eventType?: "interview_log" | "status_update" | "note" | null;
 }
 
 export interface StageEvent {
-	id: string;
-	applicationId: string;
-	title: string;
-	groupId: string | null;
-	fromStage: ApplicationStage | null;
-	toStage: ApplicationStage;
-	occurredAt: number;
-	metadata: StageEventMetadata | null;
-	outcome: JobOutcome | null;
+  id: string;
+  applicationId: string;
+  title: string;
+  groupId: string | null;
+  fromStage: ApplicationStage | null;
+  toStage: ApplicationStage;
+  occurredAt: number;
+  metadata: StageEventMetadata | null;
+  outcome: JobOutcome | null;
 }
 
 export interface ApplicationTask {
-	id: string;
-	applicationId: string;
-	type: ApplicationTaskType;
-	title: string;
-	dueDate: number | null;
-	isCompleted: boolean;
-	notes: string | null;
+  id: string;
+  applicationId: string;
+  type: ApplicationTaskType;
+  title: string;
+  dueDate: number | null;
+  isCompleted: boolean;
+  notes: string | null;
+}
+
+// --- "Your move" action surface (RECRUITMENT_TASKS.md R3). ---
+
+/** An open task joined to its job, for the action-point dashboard + nudge. */
+export interface YourMoveTask {
+  id: string;
+  applicationId: string;
+  type: ApplicationTaskType;
+  title: string;
+  dueDate: number | null;
+  notes: string | null;
+  company: string;
+  position: string;
+  jobUrl: string;
+}
+
+/** A recruitment intake the worker could not confidently resolve. */
+export interface YourMoveNeedsReview {
+  intakeId: string;
+  source: RecruitmentIntakeSource;
+  kind: RecruitmentIntakeKind;
+  preview: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface YourMove {
+  overdue: YourMoveTask[];
+  today: YourMoveTask[];
+  soon: YourMoveTask[];
+  needsReview: YourMoveNeedsReview[];
 }
 
 export interface Interview {
-	id: string;
-	applicationId: string;
-	scheduledAt: number;
-	durationMins: number | null;
-	type: InterviewType;
-	outcome: InterviewOutcome | null;
+  id: string;
+  applicationId: string;
+  scheduledAt: number;
+  durationMins: number | null;
+  type: InterviewType;
+  outcome: InterviewOutcome | null;
 }
 
 export interface JobNote {
-	id: string;
-	jobId: string;
-	title: string;
-	content: string;
-	createdAt: string;
-	updatedAt: string;
+  id: string;
+  jobId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface JobDocument {
-	id: string;
-	jobId: string;
-	fileName: string;
-	mediaType: string | null;
-	byteSize: number;
-	createdAt: string;
-	updatedAt: string;
+  id: string;
+  jobId: string;
+  fileName: string;
+  mediaType: string | null;
+  byteSize: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApplicationPacketResponse {
-	note: JobNote;
-	documents: {
-		coverLetter: JobDocument;
-		review: JobDocument;
-		interviewPrep: JobDocument;
-	};
+  note: JobNote;
+  documents: {
+    coverLetter: JobDocument;
+    review: JobDocument;
+    interviewPrep: JobDocument;
+  };
 }
 
 export type JobSource = ExtractorSourceId | (string & {});
 
 export type JobPdfSource = "generated" | "uploaded";
 export type JobPdfFreshness =
-	| "missing"
-	| "uploaded"
-	| "current"
-	| "stale"
-	| "regenerating";
+  | "missing"
+  | "uploaded"
+  | "current"
+  | "stale"
+  | "regenerating";
 
 export interface AppliedDuplicateMatch {
-	jobId: string;
-	title: string;
-	employer: string;
-	appliedAt: string;
-	score: number;
-	titleScore: number;
-	employerScore: number;
+  jobId: string;
+  title: string;
+  employer: string;
+  appliedAt: string;
+  score: number;
+  titleScore: number;
+  employerScore: number;
 }
 
 export interface JobBrief {
-	role_summary: string;
-	they_want: string[];
-	specifics: string[];
-	company_offers: string[];
-	practical_details: string[];
-	missing_or_unclear: string[];
-	repeated_signals: string[];
+  role_summary: string;
+  they_want: string[];
+  specifics: string[];
+  company_offers: string[];
+  practical_details: string[];
+  missing_or_unclear: string[];
+  repeated_signals: string[];
 }
 
 export interface Job {
-	id: string;
+  id: string;
 
-	// Source / provenance
-	source: JobSource;
-	sourceJobId: string | null; // External ID (if provided)
-	jobUrlDirect: string | null; // Source-provided direct URL (if provided)
-	datePosted: string | null; // Source-provided posting date (if provided)
+  // Source / provenance
+  source: JobSource;
+  sourceJobId: string | null; // External ID (if provided)
+  jobUrlDirect: string | null; // Source-provided direct URL (if provided)
+  datePosted: string | null; // Source-provided posting date (if provided)
 
-	// From crawler (normalized)
-	title: string;
-	employer: string;
-	employerUrl: string | null;
-	jobUrl: string; // Gradcracker listing URL
-	applicationLink: string | null; // Actual application URL
-	disciplines: string | null;
-	deadline: string | null;
-	salary: string | null;
-	location: string | null;
-	locationEvidence: JobLocationEvidence | null;
-	locationMatch?: LocationMatchResult | null;
-	degreeRequired: string | null;
-	starting: string | null;
-	jobDescription: string | null;
+  // From crawler (normalized)
+  title: string;
+  employer: string;
+  employerUrl: string | null;
+  jobUrl: string; // Gradcracker listing URL
+  applicationLink: string | null; // Actual application URL
+  disciplines: string | null;
+  deadline: string | null;
+  salary: string | null;
+  location: string | null;
+  locationEvidence: JobLocationEvidence | null;
+  locationMatch?: LocationMatchResult | null;
+  degreeRequired: string | null;
+  starting: string | null;
+  jobDescription: string | null;
 
-	// Orchestrator enrichments
-	status: JobStatus;
-	outcome: JobOutcome | null;
-	closedAt: number | null;
-	suitabilityScore: number | null; // 0-100 AI-generated score
-	suitabilityReason: string | null; // AI explanation
-	jobBrief: string | null; // Generated JD brief (JSON)
-	tailoredSummary: string | null; // Generated resume summary
-	tailoredHeadline: string | null; // Generated resume headline
-	tailoredSkills: string | null; // Generated resume skills (JSON)
-	selectedProjectIds: string | null; // Comma-separated IDs of selected projects
-	pdfPath: string | null; // Path to generated PDF
-	pdfSource: JobPdfSource | null; // Whether PDF was system-generated or user-uploaded
-	pdfRegenerating: boolean; // Whether a PDF generation/regeneration is currently in progress for this job
-	pdfFreshness: JobPdfFreshness; // Derived freshness state for the current PDF artifact
-	pdfFingerprint: string | null; // Stable hash of inputs that produced the current generated PDF
-	pdfGeneratedAt: string | null; // Timestamp of the latest generated/uploaded PDF artifact
-	tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
-	sponsorMatchScore: number | null; // 0-100 fuzzy match score with visa sponsors
-	sponsorMatchNames: string | null; // JSON array of matched sponsor names (when 100% matches or top match)
-	oeFitnessScore: number | null; // 0-100 OE-suitability score
-	oeFitnessReasons: string | null; // JSON: Array<{ rule, delta, evidence }>
-	redFlags: string | null; // JSON: Array<{ id, severity, snippet }>
-	asyncScore: number | null; // 0-100 async-friendliness score
-	asyncSignals: string | null; // JSON: string[] of matched terms
-	weeklyHoursEstimate: number | null; // Estimated weekly hours commitment
-	weeklyHoursReasons: string | null; // JSON: Array<{ rule, delta }>
-	appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
-	applyRisk?: { level: "low" | "medium" | "high"; reason: string } | null; // Computed on detail response
+  // Orchestrator enrichments
+  status: JobStatus;
+  outcome: JobOutcome | null;
+  closedAt: number | null;
+  suitabilityScore: number | null; // 0-100 AI-generated score
+  suitabilityReason: string | null; // AI explanation
+  jobBrief: string | null; // Generated JD brief (JSON)
+  tailoredSummary: string | null; // Generated resume summary
+  tailoredHeadline: string | null; // Generated resume headline
+  tailoredSkills: string | null; // Generated resume skills (JSON)
+  selectedProjectIds: string | null; // Comma-separated IDs of selected projects
+  pdfPath: string | null; // Path to generated PDF
+  pdfSource: JobPdfSource | null; // Whether PDF was system-generated or user-uploaded
+  pdfRegenerating: boolean; // Whether a PDF generation/regeneration is currently in progress for this job
+  pdfFreshness: JobPdfFreshness; // Derived freshness state for the current PDF artifact
+  pdfFingerprint: string | null; // Stable hash of inputs that produced the current generated PDF
+  pdfGeneratedAt: string | null; // Timestamp of the latest generated/uploaded PDF artifact
+  tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
+  sponsorMatchScore: number | null; // 0-100 fuzzy match score with visa sponsors
+  sponsorMatchNames: string | null; // JSON array of matched sponsor names (when 100% matches or top match)
+  oeFitnessScore: number | null; // 0-100 OE-suitability score
+  oeFitnessReasons: string | null; // JSON: Array<{ rule, delta, evidence }>
+  redFlags: string | null; // JSON: Array<{ id, severity, snippet }>
+  asyncScore: number | null; // 0-100 async-friendliness score
+  asyncSignals: string | null; // JSON: string[] of matched terms
+  weeklyHoursEstimate: number | null; // Estimated weekly hours commitment
+  weeklyHoursReasons: string | null; // JSON: Array<{ rule, delta }>
+  appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
+  applyRisk?: { level: "low" | "medium" | "high"; reason: string } | null; // Computed on detail response
 
-	// JobSpy fields (nullable for non-JobSpy sources)
-	jobType: string | null;
-	salarySource: string | null;
-	salaryInterval: string | null;
-	salaryMinAmount: number | null;
-	salaryMaxAmount: number | null;
-	salaryCurrency: string | null;
-	isRemote: boolean | null;
-	jobLevel: string | null;
-	jobFunction: string | null;
-	listingType: string | null;
-	emails: string | null;
-	companyIndustry: string | null;
-	companyLogo: string | null;
-	companyUrlDirect: string | null;
-	companyAddresses: string | null;
-	companyNumEmployees: string | null;
-	companyRevenue: string | null;
-	companyDescription: string | null;
-	skills: string | null;
-	experienceRange: string | null;
-	companyRating: number | null;
-	companyReviewsCount: number | null;
-	vacancyCount: number | null;
-	workFromHomeType: string | null;
+  // JobSpy fields (nullable for non-JobSpy sources)
+  jobType: string | null;
+  salarySource: string | null;
+  salaryInterval: string | null;
+  salaryMinAmount: number | null;
+  salaryMaxAmount: number | null;
+  salaryCurrency: string | null;
+  isRemote: boolean | null;
+  jobLevel: string | null;
+  jobFunction: string | null;
+  listingType: string | null;
+  emails: string | null;
+  companyIndustry: string | null;
+  companyLogo: string | null;
+  companyUrlDirect: string | null;
+  companyAddresses: string | null;
+  companyNumEmployees: string | null;
+  companyRevenue: string | null;
+  companyDescription: string | null;
+  skills: string | null;
+  experienceRange: string | null;
+  companyRating: number | null;
+  companyReviewsCount: number | null;
+  vacancyCount: number | null;
+  workFromHomeType: string | null;
 
-	// Timestamps
-	discoveredAt: string;
-	processedAt: string | null;
-	readyAt: string | null;
-	appliedAt: string | null;
-	createdAt: string;
-	updatedAt: string;
+  // Timestamps
+  discoveredAt: string;
+  processedAt: string | null;
+  readyAt: string | null;
+  appliedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type JobListItem = Pick<
-	Job,
-	| "id"
-	| "source"
-	| "sourceJobId"
-	| "title"
-	| "employer"
-	| "jobUrl"
-	| "applicationLink"
-	| "datePosted"
-	| "deadline"
-	| "salary"
-	| "location"
-	| "status"
-	| "outcome"
-	| "closedAt"
-	| "suitabilityScore"
-	| "sponsorMatchScore"
-	| "oeFitnessScore"
-	| "redFlags"
-	| "asyncScore"
-	| "weeklyHoursEstimate"
-	| "appliedDuplicateMatch"
-	| "jobType"
-	| "jobFunction"
-	| "pdfRegenerating"
-	| "pdfFreshness"
-	| "salaryMinAmount"
-	| "salaryMaxAmount"
-	| "salaryCurrency"
-	| "discoveredAt"
-	| "readyAt"
-	| "appliedAt"
-	| "updatedAt"
+  Job,
+  | "id"
+  | "source"
+  | "sourceJobId"
+  | "title"
+  | "employer"
+  | "jobUrl"
+  | "applicationLink"
+  | "datePosted"
+  | "deadline"
+  | "salary"
+  | "location"
+  | "status"
+  | "outcome"
+  | "closedAt"
+  | "suitabilityScore"
+  | "sponsorMatchScore"
+  | "oeFitnessScore"
+  | "redFlags"
+  | "asyncScore"
+  | "weeklyHoursEstimate"
+  | "appliedDuplicateMatch"
+  | "jobType"
+  | "jobFunction"
+  | "pdfRegenerating"
+  | "pdfFreshness"
+  | "salaryMinAmount"
+  | "salaryMaxAmount"
+  | "salaryCurrency"
+  | "discoveredAt"
+  | "readyAt"
+  | "appliedAt"
+  | "updatedAt"
 >;
 
 export interface CreateJobInput {
-	source: JobSource;
-	title: string;
-	employer: string;
-	employerUrl?: string;
-	jobUrl: string;
-	applicationLink?: string;
-	disciplines?: string;
-	deadline?: string;
-	salary?: string;
-	location?: string;
-	locationEvidence?: JobLocationEvidence;
-	degreeRequired?: string;
-	starting?: string;
-	jobDescription?: string;
+  source: JobSource;
+  title: string;
+  employer: string;
+  employerUrl?: string;
+  jobUrl: string;
+  applicationLink?: string;
+  disciplines?: string;
+  deadline?: string;
+  salary?: string;
+  location?: string;
+  locationEvidence?: JobLocationEvidence;
+  degreeRequired?: string;
+  starting?: string;
+  jobDescription?: string;
 
-	// JobSpy fields (optional)
-	sourceJobId?: string;
-	jobUrlDirect?: string;
-	datePosted?: string;
-	jobType?: string;
-	salarySource?: string;
-	salaryInterval?: string;
-	salaryMinAmount?: number;
-	salaryMaxAmount?: number;
-	salaryCurrency?: string;
-	isRemote?: boolean;
-	jobLevel?: string;
-	jobFunction?: string;
-	listingType?: string;
-	emails?: string;
-	companyIndustry?: string;
-	companyLogo?: string;
-	companyUrlDirect?: string;
-	companyAddresses?: string;
-	companyNumEmployees?: string;
-	companyRevenue?: string;
-	companyDescription?: string;
-	skills?: string;
-	experienceRange?: string;
-	companyRating?: number;
-	companyReviewsCount?: number;
-	vacancyCount?: number;
-	workFromHomeType?: string;
+  // JobSpy fields (optional)
+  sourceJobId?: string;
+  jobUrlDirect?: string;
+  datePosted?: string;
+  jobType?: string;
+  salarySource?: string;
+  salaryInterval?: string;
+  salaryMinAmount?: number;
+  salaryMaxAmount?: number;
+  salaryCurrency?: string;
+  isRemote?: boolean;
+  jobLevel?: string;
+  jobFunction?: string;
+  listingType?: string;
+  emails?: string;
+  companyIndustry?: string;
+  companyLogo?: string;
+  companyUrlDirect?: string;
+  companyAddresses?: string;
+  companyNumEmployees?: string;
+  companyRevenue?: string;
+  companyDescription?: string;
+  skills?: string;
+  experienceRange?: string;
+  companyRating?: number;
+  companyReviewsCount?: number;
+  vacancyCount?: number;
+  workFromHomeType?: string;
 }
 
 export interface ManualJobDraft {
-	source?: JobSource;
-	sourceJobId?: string;
-	title?: string;
-	employer?: string;
-	jobUrl?: string;
-	applicationLink?: string;
-	location?: string;
-	salary?: string;
-	deadline?: string;
-	jobDescription?: string;
-	jobType?: string;
-	jobLevel?: string;
-	jobFunction?: string;
-	disciplines?: string;
-	degreeRequired?: string;
-	starting?: string;
+  source?: JobSource;
+  sourceJobId?: string;
+  title?: string;
+  employer?: string;
+  jobUrl?: string;
+  applicationLink?: string;
+  location?: string;
+  salary?: string;
+  deadline?: string;
+  jobDescription?: string;
+  jobType?: string;
+  jobLevel?: string;
+  jobFunction?: string;
+  disciplines?: string;
+  degreeRequired?: string;
+  starting?: string;
 }
 
 export interface ManualJobInferenceResponse {
-	job: ManualJobDraft;
-	warning?: string | null;
+  job: ManualJobDraft;
+  warning?: string | null;
 }
 
 export interface ManualJobFetchResponse {
-	content: string;
-	url: string;
+  content: string;
+  url: string;
 }
 
 export interface WatchlistJobState {
-	source: JobSource;
-	sourceJobId: string;
-	state: "ignored" | "moved_to_workspace";
-	createdAt: string;
-	updatedAt: string;
+  source: JobSource;
+  sourceJobId: string;
+  state: "ignored" | "moved_to_workspace";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WatchlistJobStatesResponse {
-	states: WatchlistJobState[];
+  states: WatchlistJobState[];
 }
 
 export interface WatchlistCheck {
-	source: JobSource;
-	sourceJobIds: string[];
+  source: JobSource;
+  sourceJobIds: string[];
 }
 
 export interface WatchlistCheckInput {
-	checks: WatchlistCheck[];
+  checks: WatchlistCheck[];
 }
 
 export interface WatchlistCheckJobDelta {
-	source: JobSource;
-	sourceJobId: string;
-	isNewSinceLastCheck: boolean;
-	firstSeenAt: string;
-	lastSeenAt: string;
+  source: JobSource;
+  sourceJobId: string;
+  isNewSinceLastCheck: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
 }
 
 export interface WatchlistCheckResponse {
-	previousLastCheckedAt: string | null;
-	checkedAt: string;
-	jobs: WatchlistCheckJobDelta[];
+  previousLastCheckedAt: string | null;
+  checkedAt: string;
+  jobs: WatchlistCheckJobDelta[];
 }
 
 export type WatchedSourceType = "workday" | (string & {});
 
 export interface WatchlistSource {
-	id: string;
-	label: string;
-	careersUrl: string;
-	cxsJobsUrl: string | null;
-	sourceType: WatchedSourceType;
+  id: string;
+  label: string;
+  careersUrl: string;
+  cxsJobsUrl: string | null;
+  sourceType: WatchedSourceType;
 }
 
 export interface WatchlistSelectedSource {
-	id: string;
-	catalogSourceId: string | null;
-	label: string;
-	careersUrl: string;
-	cxsJobsUrl: string | null;
-	sourceType: WatchedSourceType;
-	isCustom: boolean;
-	sortOrder: number;
-	createdAt: string;
-	updatedAt: string;
+  id: string;
+  catalogSourceId: string | null;
+  label: string;
+  careersUrl: string;
+  cxsJobsUrl: string | null;
+  sourceType: WatchedSourceType;
+  isCustom: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WatchlistSourcesResponse {
-	catalogSources: WatchlistSource[];
-	selectedSources: WatchlistSelectedSource[];
-	availableSourceTypes: WatchlistSourceTypeDescriptor[];
+  catalogSources: WatchlistSource[];
+  selectedSources: WatchlistSelectedSource[];
+  availableSourceTypes: WatchlistSourceTypeDescriptor[];
 }
 
 export interface WatchlistSourceTypeDescriptor {
-	sourceType: WatchedSourceType;
-	label: string;
-	catalogLabel: string;
-	customSourceOptionLabel: string;
-	customSourceSearchText: string;
-	customSourceInputLabel: string;
-	customSourcePlaceholder: string;
-	customSourceHelpText: string;
-	emptyCatalogText: string;
-	fetchingLabel: string;
-	invalidUrlMessage: string;
-	supportsCustomSource: boolean;
-	supportsBranding: boolean;
+  sourceType: WatchedSourceType;
+  label: string;
+  catalogLabel: string;
+  customSourceOptionLabel: string;
+  customSourceSearchText: string;
+  customSourceInputLabel: string;
+  customSourcePlaceholder: string;
+  customSourceHelpText: string;
+  emptyCatalogText: string;
+  fetchingLabel: string;
+  invalidUrlMessage: string;
+  supportsCustomSource: boolean;
+  supportsBranding: boolean;
 }
 
 export type WatchlistRowState = "new" | "ignored" | "moved_to_workspace";
 
 export interface WatchlistWorkspaceJobReference {
-	id: string;
-	status: JobStatus;
+  id: string;
+  status: JobStatus;
 }
 
 export interface WatchlistJobResult {
-	jobRef: string;
-	source: JobSource;
-	sourceJobId: string;
-	sourceType: WatchedSourceType;
-	title: string;
-	employer: string;
-	jobUrl: string;
-	applicationLink: string | null;
-	location: string | null;
-	postedAt: string | null;
-	rowState: WatchlistRowState;
-	isNewSinceLastCheck: boolean;
-	workspaceJob: WatchlistWorkspaceJobReference | null;
+  jobRef: string;
+  source: JobSource;
+  sourceJobId: string;
+  sourceType: WatchedSourceType;
+  title: string;
+  employer: string;
+  jobUrl: string;
+  applicationLink: string | null;
+  location: string | null;
+  postedAt: string | null;
+  rowState: WatchlistRowState;
+  isNewSinceLastCheck: boolean;
+  workspaceJob: WatchlistWorkspaceJobReference | null;
 }
 
 export type WatchlistSourceResult =
-	| {
-			status: "success";
-			source: WatchlistSelectedSource;
-			jobs: WatchlistJobResult[];
-			total: number;
-			fetched: number;
-	  }
-	| {
-			status: "error";
-			source: WatchlistSelectedSource;
-			error: string;
-	  };
+  | {
+      status: "success";
+      source: WatchlistSelectedSource;
+      jobs: WatchlistJobResult[];
+      total: number;
+      fetched: number;
+    }
+  | {
+      status: "error";
+      source: WatchlistSelectedSource;
+      error: string;
+    };
 
 export interface WatchlistResultsResponse {
-	checkedAt: string | null;
-	previousLastCheckedAt: string | null;
-	sources: WatchlistSourceResult[];
+  checkedAt: string | null;
+  previousLastCheckedAt: string | null;
+  sources: WatchlistSourceResult[];
 }
 
 export interface WatchlistImportDraftInput {
-	selectedSourceId: string;
-	jobRef: string;
+  selectedSourceId: string;
+  jobRef: string;
 }
 
 export interface WatchlistImportDraftResponse {
-	draft: ManualJobDraft;
-	source: string | null;
-	sourceHost: string | null;
-	sourceType: WatchedSourceType;
-	catalogSourceId: string | null;
-	careersUrl: string;
+  draft: ManualJobDraft;
+  source: string | null;
+  sourceHost: string | null;
+  sourceType: WatchedSourceType;
+  catalogSourceId: string | null;
+  careersUrl: string;
 }
 
 export interface WatchlistJobDetailsInput {
-	selectedSourceId: string;
-	jobRef: string;
+  selectedSourceId: string;
+  jobRef: string;
 }
 
 export interface WatchlistJobDetailsResponse {
-	jobRef: string;
-	jobUrl: string;
-	descriptionHtml: string;
+  jobRef: string;
+  jobUrl: string;
+  descriptionHtml: string;
 }
 
 export interface WatchlistSourceBrandingInput {
-	selectedSourceId?: string | null;
-	sourceType: WatchedSourceType;
-	careersUrl: string;
+  selectedSourceId?: string | null;
+  sourceType: WatchedSourceType;
+  careersUrl: string;
 }
 
 export interface WatchlistSourceBrandingResponse {
-	careersUrl: string;
-	logoUrl: string;
-	mimeType: string;
-	imageDataUrl: string;
+  careersUrl: string;
+  logoUrl: string;
+  mimeType: string;
+  imageDataUrl: string;
 }
 
 export interface UpdateWatchlistSelectionsInput {
-	selections: Array<{
-		catalogSourceId?: string | null;
-		sourceType: WatchedSourceType;
-		label?: string | null;
-		careersUrl: string;
-	}>;
+  selections: Array<{
+    catalogSourceId?: string | null;
+    sourceType: WatchedSourceType;
+    label?: string | null;
+    careersUrl: string;
+  }>;
 }
 
 export interface UpdateJobInput {
-	title?: string;
-	employer?: string;
-	jobUrl?: string;
-	applicationLink?: string | null;
-	location?: string | null;
-	salary?: string | null;
-	deadline?: string | null;
-	status?: JobStatus;
-	outcome?: JobOutcome | null;
-	closedAt?: number | null;
-	isRemote?: boolean;
-	jobDescription?: string | null;
-	locationEvidence?: JobLocationEvidence | null;
-	suitabilityScore?: number | null;
-	suitabilityReason?: string;
-	jobBrief?: string | null;
-	tailoredSummary?: string;
-	tailoredHeadline?: string;
-	tailoredSkills?: string;
-	selectedProjectIds?: string;
-	pdfPath?: string;
-	pdfSource?: JobPdfSource | null;
-	pdfRegenerating?: boolean;
-	pdfFingerprint?: string | null;
-	pdfGeneratedAt?: string | null;
-	tracerLinksEnabled?: boolean;
-	readyAt?: string;
-	appliedAt?: string;
-	sponsorMatchScore?: number;
-	sponsorMatchNames?: string;
-	skipReason?: string | null;
-	oeFitnessScore?: number | null;
-	oeFitnessReasons?: string | null;
-	redFlags?: string | null;
-	asyncScore?: number | null;
-	asyncSignals?: string | null;
-	weeklyHoursEstimate?: number | null;
-	weeklyHoursReasons?: string | null;
+  title?: string;
+  employer?: string;
+  jobUrl?: string;
+  applicationLink?: string | null;
+  location?: string | null;
+  salary?: string | null;
+  deadline?: string | null;
+  status?: JobStatus;
+  outcome?: JobOutcome | null;
+  closedAt?: number | null;
+  isRemote?: boolean;
+  jobDescription?: string | null;
+  locationEvidence?: JobLocationEvidence | null;
+  suitabilityScore?: number | null;
+  suitabilityReason?: string;
+  jobBrief?: string | null;
+  tailoredSummary?: string;
+  tailoredHeadline?: string;
+  tailoredSkills?: string;
+  selectedProjectIds?: string;
+  pdfPath?: string;
+  pdfSource?: JobPdfSource | null;
+  pdfRegenerating?: boolean;
+  pdfFingerprint?: string | null;
+  pdfGeneratedAt?: string | null;
+  tracerLinksEnabled?: boolean;
+  readyAt?: string;
+  appliedAt?: string;
+  sponsorMatchScore?: number;
+  sponsorMatchNames?: string;
+  skipReason?: string | null;
+  oeFitnessScore?: number | null;
+  oeFitnessReasons?: string | null;
+  redFlags?: string | null;
+  asyncScore?: number | null;
+  asyncSignals?: string | null;
+  weeklyHoursEstimate?: number | null;
+  weeklyHoursReasons?: string | null;
 }
 
 export interface ActiveEmployment {
-	id: string;
-	tenantId: string;
-	jobId: string | null;
-	label: string;
-	employer: string;
-	startedAt: string;
-	endedAt: string | null;
-	timezone: string | null;
-	coreHoursStart: string | null;
-	coreHoursEnd: string | null;
-	monthlyGrossPLN: number | null;
-	hourlyRatePLN: number | null;
-	monthlyHours: number | null;
-	weeklyHoursBudget: number | null;
-	industry: string | null;
-	notes: string | null;
-	createdAt: string;
-	updatedAt: string;
+  id: string;
+  tenantId: string;
+  jobId: string | null;
+  label: string;
+  employer: string;
+  startedAt: string;
+  endedAt: string | null;
+  timezone: string | null;
+  coreHoursStart: string | null;
+  coreHoursEnd: string | null;
+  monthlyGrossPLN: number | null;
+  hourlyRatePLN: number | null;
+  monthlyHours: number | null;
+  weeklyHoursBudget: number | null;
+  industry: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateActiveEmploymentInput {
-	jobId?: string | null;
-	label: string;
-	employer: string;
-	startedAt: string;
-	endedAt?: string | null;
-	timezone?: string | null;
-	coreHoursStart?: string | null;
-	coreHoursEnd?: string | null;
-	monthlyGrossPLN?: number | null;
-	hourlyRatePLN?: number | null;
-	monthlyHours?: number | null;
-	weeklyHoursBudget?: number | null;
-	industry?: string | null;
-	notes?: string | null;
+  jobId?: string | null;
+  label: string;
+  employer: string;
+  startedAt: string;
+  endedAt?: string | null;
+  timezone?: string | null;
+  coreHoursStart?: string | null;
+  coreHoursEnd?: string | null;
+  monthlyGrossPLN?: number | null;
+  hourlyRatePLN?: number | null;
+  monthlyHours?: number | null;
+  weeklyHoursBudget?: number | null;
+  industry?: string | null;
+  notes?: string | null;
 }
 
 export interface UpdateActiveEmploymentInput {
-	label?: string;
-	employer?: string;
-	startedAt?: string;
-	endedAt?: string | null;
-	timezone?: string | null;
-	coreHoursStart?: string | null;
-	coreHoursEnd?: string | null;
-	monthlyGrossPLN?: number | null;
-	hourlyRatePLN?: number | null;
-	monthlyHours?: number | null;
-	weeklyHoursBudget?: number | null;
-	industry?: string | null;
-	notes?: string | null;
+  label?: string;
+  employer?: string;
+  startedAt?: string;
+  endedAt?: string | null;
+  timezone?: string | null;
+  coreHoursStart?: string | null;
+  coreHoursEnd?: string | null;
+  monthlyGrossPLN?: number | null;
+  hourlyRatePLN?: number | null;
+  monthlyHours?: number | null;
+  weeklyHoursBudget?: number | null;
+  industry?: string | null;
+  notes?: string | null;
 }
 
 export interface CreateJobNoteInput {
-	title: string;
-	content: string;
+  title: string;
+  content: string;
 }
 
 export interface UpdateJobNoteInput {
-	title: string;
-	content: string;
+  title: string;
+  content: string;
 }

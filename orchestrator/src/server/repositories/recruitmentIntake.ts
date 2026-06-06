@@ -6,11 +6,11 @@
 
 import { randomUUID } from "node:crypto";
 import type {
-	RecruitmentIntakeKind,
-	RecruitmentIntakeSource,
-	RecruitmentIntakeStatus,
+  RecruitmentIntakeKind,
+  RecruitmentIntakeSource,
+  RecruitmentIntakeStatus,
 } from "@shared/types";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "../db/index";
 import { getActiveTenantId } from "../tenancy/context";
 
@@ -19,89 +19,104 @@ const { rawIntake } = schema;
 export type RawIntakeRow = typeof rawIntake.$inferSelect;
 
 export interface InsertIntakeInput {
-	source: RecruitmentIntakeSource;
-	kind: RecruitmentIntakeKind;
-	rawText: string;
-	contentHash: string;
-	meta?: Record<string, unknown> | null;
+  source: RecruitmentIntakeSource;
+  kind: RecruitmentIntakeKind;
+  rawText: string;
+  contentHash: string;
+  meta?: Record<string, unknown> | null;
 }
 
 export async function getById(id: string): Promise<RawIntakeRow | undefined> {
-	const tenantId = getActiveTenantId();
-	const rows = await db
-		.select()
-		.from(rawIntake)
-		.where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)))
-		.limit(1);
-	return rows[0];
+  const tenantId = getActiveTenantId();
+  const rows = await db
+    .select()
+    .from(rawIntake)
+    .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)))
+    .limit(1);
+  return rows[0];
 }
 
 export async function findByHash(
-	contentHash: string,
+  contentHash: string,
 ): Promise<RawIntakeRow | undefined> {
-	const tenantId = getActiveTenantId();
-	const rows = await db
-		.select()
-		.from(rawIntake)
-		.where(
-			and(
-				eq(rawIntake.tenantId, tenantId),
-				eq(rawIntake.contentHash, contentHash),
-			),
-		)
-		.limit(1);
-	return rows[0];
+  const tenantId = getActiveTenantId();
+  const rows = await db
+    .select()
+    .from(rawIntake)
+    .where(
+      and(
+        eq(rawIntake.tenantId, tenantId),
+        eq(rawIntake.contentHash, contentHash),
+      ),
+    )
+    .limit(1);
+  return rows[0];
 }
 
 export async function insertIntake(
-	input: InsertIntakeInput,
+  input: InsertIntakeInput,
 ): Promise<RawIntakeRow> {
-	const tenantId = getActiveTenantId();
-	const [row] = await db
-		.insert(rawIntake)
-		.values({
-			id: randomUUID(),
-			tenantId,
-			source: input.source,
-			kind: input.kind,
-			rawText: input.rawText,
-			contentHash: input.contentHash,
-			meta: input.meta ?? null,
-			status: "pending",
-		})
-		.returning();
-	return row;
+  const tenantId = getActiveTenantId();
+  const [row] = await db
+    .insert(rawIntake)
+    .values({
+      id: randomUUID(),
+      tenantId,
+      source: input.source,
+      kind: input.kind,
+      rawText: input.rawText,
+      contentHash: input.contentHash,
+      meta: input.meta ?? null,
+      status: "pending",
+    })
+    .returning();
+  return row;
 }
 
 export async function listPending(limit = 50): Promise<RawIntakeRow[]> {
-	const tenantId = getActiveTenantId();
-	return db
-		.select()
-		.from(rawIntake)
-		.where(
-			and(eq(rawIntake.tenantId, tenantId), eq(rawIntake.status, "pending")),
-		)
-		.limit(limit);
+  const tenantId = getActiveTenantId();
+  return db
+    .select()
+    .from(rawIntake)
+    .where(
+      and(eq(rawIntake.tenantId, tenantId), eq(rawIntake.status, "pending")),
+    )
+    .limit(limit);
+}
+
+export async function listNeedsReview(limit = 50): Promise<RawIntakeRow[]> {
+  const tenantId = getActiveTenantId();
+  return db
+    .select()
+    .from(rawIntake)
+    .where(
+      and(
+        eq(rawIntake.tenantId, tenantId),
+        eq(rawIntake.status, "needs_review"),
+      ),
+    )
+    .orderBy(desc(rawIntake.createdAt))
+    .limit(limit);
 }
 
 export async function markStatus(
-	id: string,
-	status: RecruitmentIntakeStatus,
-	patch: { jobId?: string | null; errorMessage?: string | null } = {},
+  id: string,
+  status: RecruitmentIntakeStatus,
+  patch: { jobId?: string | null; errorMessage?: string | null } = {},
 ): Promise<void> {
-	const tenantId = getActiveTenantId();
-	await db
-		.update(rawIntake)
-		.set({
-			status,
-			processedAt:
-				status === "processed" || status === "error"
-					? new Date().toISOString()
-					: null,
-			...(patch.jobId !== undefined ? { jobId: patch.jobId } : {}),
-			...(patch.errorMessage !== undefined
-				? { errorMessage: patch.errorMessage }
-				: {}),
-		})
-		.where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
+  const tenantId = getActiveTenantId();
+  await db
+    .update(rawIntake)
+    .set({
+      status,
+      processedAt:
+        status === "processed" || status === "error"
+          ? new Date().toISOString()
+          : null,
+      ...(patch.jobId !== undefined ? { jobId: patch.jobId } : {}),
+      ...(patch.errorMessage !== undefined
+        ? { errorMessage: patch.errorMessage }
+        : {}),
+    })
+    .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
 }
