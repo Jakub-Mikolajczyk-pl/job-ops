@@ -33,3 +33,22 @@ jobs:
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$DEPLOY_USER@$DEPLOY_HOST" deploy
           echo "Deploy command dispatched. Build log on CT104: /var/log/deploy-jobops.log"
+
+      - name: Notify Telegram
+        if: success()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT:  ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN}" ] || [ -z "${TG_CHAT}" ]; then
+            echo "ERROR: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secret is empty" >&2; exit 1
+          fi
+          SHORT_SHA=$(echo "${GITHUB_SHA:-unknown}" | cut -c1-7)
+          MSG="✅ <b>job-ops</b> deployed to CT104 (${GITHUB_REF_NAME:-main} @ ${SHORT_SHA})"
+          RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT}" -d parse_mode="HTML" --data-urlencode text="$MSG")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          if [ "$HTTP_CODE" != "200" ]; then echo "ERROR: Telegram HTTP ${HTTP_CODE}: ${BODY}" >&2; exit 1; fi
+          echo "Telegram notified (HTTP 200)"
