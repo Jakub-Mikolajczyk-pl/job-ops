@@ -270,6 +270,7 @@ export const OrchestratorPage: React.FC = () => {
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
+    canMarkExpiredSelected,
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
@@ -568,12 +569,20 @@ export const OrchestratorPage: React.FC = () => {
         canMoveSelected={canMoveSelected}
         canSkipSelected={canSkipSelected}
         canRescoreSelected={canRescoreSelected}
-        canCompareSelected={selectedJobIds.size >= 2 && selectedJobIds.size <= 4}
+        canMarkExpiredSelected={canMarkExpiredSelected}
+        canCompareSelected={
+          selectedJobIds.size >= 2 && selectedJobIds.size <= 4
+        }
         jobActionInFlight={jobActionInFlight !== null}
         onMoveToReady={() => void runJobAction("move_to_ready")}
         onSkipSelected={() => void runJobAction("skip")}
         onRescoreSelected={() => void runJobAction("rescore")}
-        onCompareSelected={() => navigate("/compare?ids=" + Array.from(selectedJobIds).slice(0, 4).join(","))}
+        onMarkExpiredSelected={() => void runJobAction("mark_expired")}
+        onCompareSelected={() =>
+          navigate(
+            "/compare?ids=" + Array.from(selectedJobIds).slice(0, 4).join(","),
+          )
+        }
         onClear={clearSelection}
       />
 

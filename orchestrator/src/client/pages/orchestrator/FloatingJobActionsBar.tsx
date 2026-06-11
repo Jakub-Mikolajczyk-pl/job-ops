@@ -7,11 +7,13 @@ interface FloatingJobActionsBarProps {
   canMoveSelected: boolean;
   canSkipSelected: boolean;
   canRescoreSelected: boolean;
+  canMarkExpiredSelected: boolean;
   canCompareSelected: boolean;
   jobActionInFlight: boolean;
   onMoveToReady: () => void;
   onSkipSelected: () => void;
   onRescoreSelected: () => void;
+  onMarkExpiredSelected: () => void;
   onCompareSelected: () => void;
   onClear: () => void;
 }
@@ -21,11 +23,13 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   canMoveSelected,
   canSkipSelected,
   canRescoreSelected,
+  canMarkExpiredSelected,
   canCompareSelected,
   jobActionInFlight,
   onMoveToReady,
   onSkipSelected,
   onRescoreSelected,
+  onMarkExpiredSelected,
   onCompareSelected,
   onClear,
 }) => {
@@ -78,6 +82,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                   onClick={onRescoreSelected}
                 >
                   Recalculate match
+                </Button>
+              )}
+              {canMarkExpiredSelected && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={jobActionInFlight}
+                  onClick={onMarkExpiredSelected}
+                >
+                  Mark expired
                 </Button>
               )}
               {canCompareSelected && (

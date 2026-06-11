@@ -353,6 +353,20 @@ export async function skipJob(
 	return getSingleJobFromActionResult(result, idOrIds);
 }
 
+export async function markJobExpired(ids: string[]): Promise<JobActionResponse>;
+export async function markJobExpired(id: string): Promise<Job>;
+export async function markJobExpired(
+	idOrIds: string | string[],
+): Promise<Job | JobActionResponse> {
+	const jobIds = toJobIdList(idOrIds);
+	const result = await runJobAction({
+		action: "mark_expired",
+		jobIds,
+	});
+	if (Array.isArray(idOrIds)) return result;
+	return getSingleJobFromActionResult(result, idOrIds);
+}
+
 export async function runJobAction(
 	input: JobActionRequest,
 ): Promise<JobActionResponse> {

@@ -1,10 +1,21 @@
-import type { JobActionResponse, JobListItem } from "@shared/types";
+import {
+  EXPIRABLE_JOB_STATUSES,
+  type JobActionResponse,
+  type JobListItem,
+} from "@shared/types";
 
 const SKIPPABLE_STATUSES = new Set(["discovered", "ready"]);
+const EXPIRABLE_STATUSES = new Set<string>(EXPIRABLE_JOB_STATUSES);
 
 export function canSkip(jobs: JobListItem[]): boolean {
   return (
     jobs.length > 0 && jobs.every((job) => SKIPPABLE_STATUSES.has(job.status))
+  );
+}
+
+export function canMarkExpired(jobs: JobListItem[]): boolean {
+  return (
+    jobs.length > 0 && jobs.every((job) => EXPIRABLE_STATUSES.has(job.status))
   );
 }
 

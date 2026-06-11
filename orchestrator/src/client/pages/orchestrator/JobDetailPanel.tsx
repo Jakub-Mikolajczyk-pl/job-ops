@@ -12,6 +12,7 @@ import { TooltipWhenDisabled } from "@client/components/TooltipWhenDisabled";
 import { TailoringWorkspace } from "@client/components/tailoring/TailoringWorkspace";
 import {
   useMarkAsAppliedMutation,
+  useMarkExpiredJobMutation,
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
 import { useProfile } from "@client/hooks/useProfile";
@@ -33,6 +34,7 @@ import type {
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarOff,
   CheckCircle2,
   CircleAlert,
   Copy,
@@ -261,6 +263,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const previousSelectionKeyRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
+  const markExpiredMutation = useMarkExpiredJobMutation();
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const { personName } = useProfile();
 
@@ -466,6 +469,24 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       showErrorToast(error, "Failed to skip");
     }
   }, [handleJobMoved, onJobUpdated, selectedJob, skipJobMutation]);
+
+  const handleMarkExpired = useCallback(async () => {
+    if (!selectedJob) return;
+    try {
+      await markExpiredMutation.mutateAsync(selectedJob.id);
+      trackProductEvent("jobs_job_action_completed", {
+        action: "mark_expired",
+        result: "success",
+        from_status: selectedJob.status,
+        to_status: "expired",
+      });
+      toast.message("Job marked as expired");
+      handleJobMoved(selectedJob.id);
+      await onJobUpdated();
+    } catch (error) {
+      showErrorToast(error, "Failed to mark as expired");
+    }
+  }, [handleJobMoved, markExpiredMutation, onJobUpdated, selectedJob]);
 
   const handleOpenPdf = useCallback(() => {
     if (!selectedJob || !selectedJob.pdfPath || isPdfRegenerating(selectedJob))
@@ -695,6 +716,10 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 {canSkip && (
                   <>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => void handleMarkExpired()}>
+                      <CalendarOff className="mr-2 h-4 w-4" />
+                      Mark expired
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={() => void handleSkip()}
                       className="text-destructive focus:text-destructive"

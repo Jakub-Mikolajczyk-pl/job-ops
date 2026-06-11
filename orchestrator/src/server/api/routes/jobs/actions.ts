@@ -312,6 +312,12 @@ jobsActionsRouter.post("/:id/skip", async (req: Request, res: Response) => {
   ok(res, await hydrateJobPdfFreshness(result.job));
 });
 
+jobsActionsRouter.post("/:id/expire", async (req: Request, res: Response) => {
+  const result = await executeJobActionForJob("mark_expired", req.params.id);
+  if (!result.ok) return fail(res, mapJobActionFailure(result));
+  ok(res, await hydrateJobPdfFreshness(result.job));
+});
+
 jobsActionsRouter.post(
   "/:id/interview-prep",
   async (req: Request, res: Response) => {

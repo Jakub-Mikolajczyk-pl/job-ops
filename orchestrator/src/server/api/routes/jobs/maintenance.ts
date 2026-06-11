@@ -2,11 +2,27 @@ import { badRequest, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { isDemoMode, sendDemoBlocked } from "@server/config/demo";
 import * as jobsRepo from "@server/repositories/jobs";
+import { expireOverdueJobs } from "@server/services/job-expiry";
 import type { JobStatus } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
 export const jobsMaintenanceRouter = Router();
+
+jobsMaintenanceRouter.post(
+  "/expire-overdue",
+  async (_req: Request, res: Response) => {
+    try {
+      const result = await expireOverdueJobs();
+      ok(res, {
+        message: `Marked ${result.expired} overdue jobs as expired`,
+        ...result,
+      });
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
 
 const jobStatusParamSchema = z.enum([
   "discovered",

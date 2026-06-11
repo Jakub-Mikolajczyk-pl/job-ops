@@ -2,6 +2,7 @@ import { createJob } from "@shared/testing/factories.js";
 import type { JobActionResponse } from "@shared/types.js";
 import { describe, expect, it } from "vitest";
 import {
+  canMarkExpired,
   canMoveToReady,
   canRescore,
   canSkip,
@@ -43,6 +44,22 @@ describe("jobActions", () => {
         createJob({ id: "2", status: "processing" }),
       ]),
     ).toBe(false);
+  });
+
+  it("computes eligibility for mark-expired", () => {
+    expect(
+      canMarkExpired([
+        createJob({ id: "1", status: "discovered" }),
+        createJob({ id: "2", status: "ready" }),
+      ]),
+    ).toBe(true);
+    expect(canMarkExpired([createJob({ id: "1", status: "applied" })])).toBe(
+      false,
+    );
+    expect(canMarkExpired([createJob({ id: "1", status: "expired" })])).toBe(
+      false,
+    );
+    expect(canMarkExpired([])).toBe(false);
   });
 
   it("extracts failed job ids from an action response", () => {

@@ -11,6 +11,7 @@ import { trackProductEvent } from "@/lib/analytics";
 import type { FilterTab } from "./constants";
 import { JobActionProgressToast } from "./JobActionProgressToast";
 import {
+  canMarkExpired,
   canMoveToReady,
   canRescore,
   canSkip,
@@ -24,12 +25,14 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_ready: "Moving jobs to Ready...",
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
+  mark_expired: "Marking selected jobs as expired...",
 };
 
 const jobActionSuccessLabel: Record<JobAction, string> = {
   move_to_ready: "jobs moved to Ready",
   skip: "jobs skipped",
   rescore: "matches recalculated",
+  mark_expired: "jobs marked as expired",
 };
 
 interface UseJobSelectionActionsArgs {
@@ -63,6 +66,10 @@ export function useJobSelectionActions({
   );
   const canRescoreSelected = useMemo(
     () => canRescore(selectedJobs),
+    [selectedJobs],
+  );
+  const canMarkExpiredSelected = useMemo(
+    () => canMarkExpired(selectedJobs),
     [selectedJobs],
   );
 
@@ -282,6 +289,7 @@ export function useJobSelectionActions({
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
+    canMarkExpiredSelected,
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,

@@ -14,6 +14,14 @@ export type JobStatus =
   | "skipped" // User skipped this job
   | "expired"; // Deadline passed
 
+// Statuses from which a job can be marked expired (manually or by the
+// automatic deadline sweep). Once applied, expiry of the posting is tracked
+// through application outcomes instead.
+export const EXPIRABLE_JOB_STATUSES: readonly JobStatus[] = [
+	"discovered",
+	"ready",
+];
+
 export const APPLICATION_STAGES = [
   "applied",
   "recruiter_screen",

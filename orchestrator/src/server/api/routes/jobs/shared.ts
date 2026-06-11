@@ -211,6 +211,10 @@ export const jobActionRequestSchema = z.discriminatedUnion("action", [
 		jobIds: z.array(z.string().min(1)).min(1).max(100),
 	}),
 	z.object({
+		action: z.literal("mark_expired"),
+		jobIds: z.array(z.string().min(1)).min(1).max(100),
+	}),
+	z.object({
 		action: z.literal("move_to_ready"),
 		jobIds: z.array(z.string().min(1)).min(1).max(100),
 		options: z

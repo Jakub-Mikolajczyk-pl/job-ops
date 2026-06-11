@@ -9,12 +9,21 @@ import {
 import { generateJobBrief } from "@server/services/job-brief";
 import { getProfile } from "@server/services/profile";
 import { scoreJobSuitability } from "@server/services/scorer";
-import type { JobAction, JobActionResult, JobStatus } from "@shared/types";
+import {
+  EXPIRABLE_JOB_STATUSES,
+  type JobAction,
+  type JobActionResult,
+  type JobStatus,
+} from "@shared/types";
 
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "ready",
 ]);
+
+const EXPIRABLE_STATUSES: ReadonlySet<JobStatus> = new Set(
+  EXPIRABLE_JOB_STATUSES,
+);
 
 function mapErrorForResult(error: unknown): {
   code: string;
@@ -134,6 +143,30 @@ export async function executeJobActionForJob(
       }
 
       const updated = await jobsRepo.updateJob(jobId, { status: "skipped" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "mark_expired") {
+      if (!EXPIRABLE_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job cannot be marked expired from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: [...EXPIRABLE_JOB_STATUSES],
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "expired" });
       if (!updated) {
         throw new AppError({
           status: 404,

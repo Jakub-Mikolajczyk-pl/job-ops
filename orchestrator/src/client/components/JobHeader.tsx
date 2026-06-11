@@ -1,4 +1,5 @@
 import { isAwaitingAiScore, ScoreRing } from "@client/components";
+import { isJobDeadlinePassed } from "@shared/job-deadline.js";
 import type { AppliedDuplicateMatch, Job } from "@shared/types.js";
 import { Calendar, DollarSign, Loader2, MapPin, Search } from "lucide-react";
 import type React from "react";
@@ -244,7 +245,9 @@ const OePill: React.FC<OePillProps> = ({
       )}
       {parsedReasons.length > 0 && (
         <div>
-          <p className="text-[10px] text-muted-foreground font-medium">Score breakdown:</p>
+          <p className="text-[10px] text-muted-foreground font-medium">
+            Score breakdown:
+          </p>
           {parsedReasons
             .filter((r) => r.delta !== 0)
             .slice(0, 5)
@@ -299,6 +302,7 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
     ? undefined
     : { jobPageBackTo: `${location.pathname}${location.search}` };
   const deadline = formatDate(job.deadline);
+  const deadlinePassed = isJobDeadlinePassed(job.deadline);
   const postingAge = formatPostingAgeLabel(job.datePosted);
   const jobStatusTooltip =
     job.status === "discovered" ? (
@@ -341,9 +345,20 @@ export const JobHeader: React.FC<JobHeaderProps> = ({
               </span>
             )}
             {deadline && (
-              <span className="flex items-center gap-1">
+              <span
+                className={cn(
+                  "flex items-center gap-1",
+                  deadlinePassed && "text-rose-400",
+                )}
+                title={
+                  deadlinePassed ? "Application deadline has passed" : undefined
+                }
+              >
                 <Calendar className="size-4" />
                 {deadline}
+                {deadlinePassed && (
+                  <span className="font-medium">· passed</span>
+                )}
               </span>
             )}
             {job.salary && (

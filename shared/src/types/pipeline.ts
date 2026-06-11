@@ -255,11 +255,11 @@ export interface JobsRevisionResponse {
   statusFilter: string | null;
 }
 
-export type JobAction = "skip" | "move_to_ready" | "rescore";
+export type JobAction = "skip" | "move_to_ready" | "rescore" | "mark_expired";
 
 export type JobActionRequest =
   | {
-      action: "skip" | "rescore";
+      action: "skip" | "rescore" | "mark_expired";
       jobIds: string[];
     }
   | {

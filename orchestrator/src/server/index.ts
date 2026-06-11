@@ -19,6 +19,7 @@ import { attachChallengeViewerUpgradeProxy } from "./services/challenge-viewer";
 import { initializeDemoModeServices } from "./services/demo-mode";
 import { applyStoredEnvOverrides } from "./services/envSettings";
 import { initializeHistoricalServerEventReplaySafely } from "./services/historical-product-analytics";
+import { startJobExpiryScheduler } from "./services/job-expiry";
 import { startNudgeScheduler } from "./services/nudge-telegram";
 import { initialize as initializeVisaSponsors } from "./services/visa-sponsors/index";
 
@@ -140,6 +141,20 @@ async function startServer() {
       }, AUTH_SESSION_CLEANUP_INTERVAL_MS);
     } catch (error) {
       logger.warn("Failed to initialize auth session cleanup", {
+        error: sanitizeUnknown(error),
+      });
+    }
+
+    try {
+      if (process.env.DEMO_MODE === "true") {
+        logger.info(
+          "Demo mode enabled. Skipping job expiry scheduler to keep seeded data stable.",
+        );
+      } else {
+        startJobExpiryScheduler();
+      }
+    } catch (error) {
+      logger.warn("Failed to start job expiry scheduler", {
         error: sanitizeUnknown(error),
       });
     }
