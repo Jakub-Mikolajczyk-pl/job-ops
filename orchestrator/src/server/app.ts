@@ -212,6 +212,11 @@ export function createAuthGuard() {
       /^\/api\/[^/]+\/health$/.test(normalizedPath)
     )
       return true;
+    if (
+      normalizedMethod === "GET" &&
+      normalizedPath === "/api/dashboard/summary"
+    )
+      return Boolean(process.env.JOBOPS_DASHBOARD_TOKEN?.trim());
 
     return false;
   }

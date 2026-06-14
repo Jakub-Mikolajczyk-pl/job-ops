@@ -6,6 +6,7 @@ import { Router } from "express";
 import { activeEmploymentsRouter } from "./routes/active-employments";
 import { authRouter } from "./routes/auth";
 import { backupRouter } from "./routes/backup";
+import { dashboardRouter } from "./routes/dashboard";
 import { databaseRouter } from "./routes/database";
 import { demoRouter } from "./routes/demo";
 import { designResumeRouter } from "./routes/design-resume";
@@ -34,6 +35,7 @@ import { workspacesRouter } from "./routes/workspaces";
 export const apiRouter = Router();
 
 apiRouter.use("/jobs", jobsRouter);
+apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/jobs/:id/chat", ghostwriterRouter);
 apiRouter.use("/ingest", ingestRouter);
 apiRouter.use("/tasks", tasksRouter);
