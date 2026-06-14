@@ -39,8 +39,21 @@ describe.sequential("Dashboard API route", () => {
       jobUrl: "https://example.com/jobs/ready-platform",
       jobDescription: "Another private description.",
     });
+    const oldDiscovered = await createJob({
+      source: "manual",
+      title: "Old Backlog Role",
+      employer: "Initech",
+      jobUrl: "https://example.com/jobs/old-backlog",
+      jobDescription: "Old backlog item.",
+    });
     await updateJob(discovered.id, { suitabilityScore: 88 });
     await updateJob(ready.id, { status: "ready", suitabilityScore: 74 });
+    const { db, schema } = await import("@server/db");
+    const { eq } = await import("drizzle-orm");
+    await db
+      .update(schema.jobs)
+      .set({ discoveredAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(schema.jobs.id, oldDiscovered.id));
 
     const unauthorized = await fetch(`${baseUrl}/api/dashboard/summary`);
     expect(unauthorized.status).toBe(401);
@@ -55,33 +68,40 @@ describe.sequential("Dashboard API route", () => {
       ok: true,
       data: {
         new_offers: 1,
-        action_required: 2,
+        action_required: 3,
         counts: {
-          discovered: 1,
+          discovered: 2,
           ready: 1,
           skipped: 0,
         },
-        offers: [
-          {
-            id: discovered.id,
-            title: "Fresh Backend Role",
-            employer: "Acme",
-            source: "manual",
-            status: "discovered",
-            score: 88,
-            path: `/jobs/discovered/${discovered.id}`,
-          },
-          {
-            id: ready.id,
-            title: "Ready Platform Role",
-            employer: "Globex",
-            source: "manual",
-            status: "ready",
-            score: 74,
-            path: `/jobs/ready/${ready.id}`,
-          },
-        ],
       },
+    });
+    expect(body.data.offers.slice(0, 2)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: discovered.id,
+          title: "Fresh Backend Role",
+          employer: "Acme",
+          source: "manual",
+          status: "discovered",
+          score: 88,
+          path: `/jobs/discovered/${discovered.id}`,
+        }),
+        expect.objectContaining({
+          id: ready.id,
+          title: "Ready Platform Role",
+          employer: "Globex",
+          source: "manual",
+          status: "ready",
+          score: 74,
+          path: `/jobs/ready/${ready.id}`,
+        }),
+      ]),
+    );
+    expect(body.data.offers[2]).toMatchObject({
+      id: oldDiscovered.id,
+      title: "Old Backlog Role",
+      status: "discovered",
     });
     expect(body.data.offers[0]).not.toHaveProperty("jobDescription");
     expect(typeof body.meta.requestId).toBe("string");

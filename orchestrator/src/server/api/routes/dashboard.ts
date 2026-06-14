@@ -10,6 +10,7 @@ import { type Request, type Response, Router } from "express";
 export const dashboardRouter = Router();
 
 const DASHBOARD_STATUSES: JobStatus[] = ["discovered", "ready"];
+const DEFAULT_NEW_WINDOW_HOURS = 48;
 
 dashboardRouter.get(
   "/summary",
@@ -49,10 +50,18 @@ dashboardRouter.get(
               updated_at: job.updatedAt,
               path: `/jobs/${job.status}/${job.id}`,
             }));
+          const newWindowHours = getNewWindowHours();
+          const newSince = Date.now() - newWindowHours * 60 * 60 * 1000;
+          const newOffers = jobs.filter(
+            (job) =>
+              job.status === "discovered" &&
+              Date.parse(job.discoveredAt) >= newSince,
+          ).length;
 
           ok(res, {
-            new_offers: counts.discovered,
+            new_offers: newOffers,
             action_required: counts.discovered + counts.ready,
+            new_window_hours: newWindowHours,
             latest_discovered_at: offers[0]?.discovered_at ?? null,
             counts,
             offers,
@@ -85,13 +94,15 @@ function compareDashboardOffer(
   left: { status: JobStatus; discoveredAt: string },
   right: { status: JobStatus; discoveredAt: string },
 ): number {
-  const statusDiff = statusRank(left.status) - statusRank(right.status);
-  if (statusDiff !== 0) return statusDiff;
   return right.discoveredAt.localeCompare(left.discoveredAt);
 }
 
-function statusRank(status: JobStatus): number {
-  if (status === "discovered") return 0;
-  if (status === "ready") return 1;
-  return 2;
+function getNewWindowHours(): number {
+  const parsed = Number.parseInt(
+    process.env.JOBOPS_DASHBOARD_NEW_WINDOW_HOURS ?? "",
+    10,
+  );
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_NEW_WINDOW_HOURS;
 }
