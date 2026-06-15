@@ -92,6 +92,7 @@ export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
 
 export const RECRUITMENT_INTAKE_SOURCES = [
   "telegram",
+  "telegram_brain_intake",
   "folder",
   "hidock",
   "notion_migration",
@@ -188,6 +189,31 @@ export interface YourMove {
   today: YourMoveTask[];
   soon: YourMoveTask[];
   needsReview: YourMoveNeedsReview[];
+}
+
+export interface RecruitmentIntakeDashboardItem {
+  id: string;
+  source: RecruitmentIntakeSource;
+  status: RecruitmentIntakeStatus;
+  hash: string;
+  createdAt: string;
+  processedAt: string | null;
+  error: string | null;
+  rawTextPreview: string;
+  meta: Record<string, unknown> | null;
+  jobId: string | null;
+}
+
+export interface RecruitmentIntakeDashboardCounts {
+  pending: number;
+  needsReview: number;
+  processed: number;
+  error: number;
+}
+
+export interface RecruitmentIntakeDashboard {
+  items: RecruitmentIntakeDashboardItem[];
+  counts: RecruitmentIntakeDashboardCounts;
 }
 
 export interface Interview {

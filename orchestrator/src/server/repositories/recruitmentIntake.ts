@@ -6,11 +6,13 @@
 
 import { randomUUID } from "node:crypto";
 import type {
+  RecruitmentIntakeDashboardCounts,
+  RecruitmentIntakeDashboardItem,
   RecruitmentIntakeKind,
   RecruitmentIntakeSource,
   RecruitmentIntakeStatus,
 } from "@shared/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { db, schema } from "../db/index";
 import { getActiveTenantId } from "../tenancy/context";
 
@@ -97,6 +99,56 @@ export async function listNeedsReview(limit = 50): Promise<RawIntakeRow[]> {
     )
     .orderBy(desc(rawIntake.createdAt))
     .limit(limit);
+}
+
+export async function listRecentForDashboard(
+  limit = 50,
+): Promise<RecruitmentIntakeDashboardItem[]> {
+  const tenantId = getActiveTenantId();
+  const rows = await db
+    .select()
+    .from(rawIntake)
+    .where(eq(rawIntake.tenantId, tenantId))
+    .orderBy(desc(rawIntake.createdAt))
+    .limit(limit);
+
+  return rows.map((row) => ({
+    id: row.id,
+    source: row.source as RecruitmentIntakeSource,
+    status: row.status as RecruitmentIntakeStatus,
+    hash: row.contentHash,
+    createdAt: row.createdAt,
+    processedAt: row.processedAt ?? null,
+    error: row.errorMessage ?? null,
+    rawTextPreview: row.rawText.slice(0, 500),
+    meta: (row.meta as Record<string, unknown> | null) ?? null,
+    jobId: row.jobId ?? null,
+  }));
+}
+
+export async function getDashboardCounts(): Promise<RecruitmentIntakeDashboardCounts> {
+  const tenantId = getActiveTenantId();
+  const rows = await db
+    .select({ status: rawIntake.status, total: count() })
+    .from(rawIntake)
+    .where(eq(rawIntake.tenantId, tenantId))
+    .groupBy(rawIntake.status);
+
+  const counts: RecruitmentIntakeDashboardCounts = {
+    pending: 0,
+    needsReview: 0,
+    processed: 0,
+    error: 0,
+  };
+
+  for (const row of rows) {
+    if (row.status === "pending") counts.pending = row.total;
+    if (row.status === "needs_review") counts.needsReview = row.total;
+    if (row.status === "processed") counts.processed = row.total;
+    if (row.status === "error") counts.error = row.total;
+  }
+
+  return counts;
 }
 
 export async function markStatus(

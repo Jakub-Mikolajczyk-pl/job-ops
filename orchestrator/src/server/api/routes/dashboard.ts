@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
-import { serviceUnavailable, toAppError, unauthorized } from "@infra/errors";
+import { toAppError } from "@infra/errors";
 import { asyncRoute, fail, ok } from "@infra/http";
+import { requireDashboardToken } from "@server/api/dashboard-auth";
 import { runWithRequestContext } from "@infra/request-context";
 import * as jobsRepo from "@server/repositories/jobs";
 import { DEFAULT_TENANT_ID } from "@server/tenancy/constants";
@@ -15,14 +15,8 @@ const DEFAULT_NEW_WINDOW_HOURS = 48;
 dashboardRouter.get(
   "/summary",
   asyncRoute(async (req: Request, res: Response) => {
-    const expectedToken = process.env.JOBOPS_DASHBOARD_TOKEN?.trim();
-    if (!expectedToken) {
-      return fail(res, serviceUnavailable("Dashboard token is not configured"));
-    }
-
-    if (!hasValidBearerToken(req, expectedToken)) {
-      return fail(res, unauthorized());
-    }
+    const auth = requireDashboardToken(req, res);
+    if (!auth.ok) return;
 
     const tenantId =
       process.env.JOBOPS_DASHBOARD_TENANT_ID?.trim() || DEFAULT_TENANT_ID;
@@ -73,22 +67,6 @@ dashboardRouter.get(
     );
   }),
 );
-
-function hasValidBearerToken(req: Request, expectedToken: string): boolean {
-  const authHeader = req.headers.authorization ?? "";
-  if (!authHeader.startsWith("Bearer ")) return false;
-  const actualToken = authHeader.slice("Bearer ".length).trim();
-  return constantTimeEquals(actualToken, expectedToken);
-}
-
-function constantTimeEquals(actual: string, expected: string): boolean {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  return (
-    actualBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(actualBuffer, expectedBuffer)
-  );
-}
 
 function compareDashboardOffer(
   left: { status: JobStatus; discoveredAt: string },

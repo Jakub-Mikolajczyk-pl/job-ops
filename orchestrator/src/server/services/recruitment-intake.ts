@@ -6,17 +6,12 @@
  * for tech-call transcripts). Idempotent: a processed row is never re-applied.
  *
  * Reuses the app's own LLM provider via ./modelSelection (same path as
- * interview-prep / ghostwriter) — no separate AI client.
+ * interview-prep / ghostwriter) - no separate AI client.
  */
 
 import { randomUUID } from "node:crypto";
 import { logger } from "@infra/logger";
-import {
-  APPLICATION_STAGES,
-  type ApplicationStage,
-  STUDY_TOPIC_PRIORITIES,
-  type StudyTopicPriority,
-} from "@shared/types";
+import { APPLICATION_STAGES, type ApplicationStage, type StudyTopicPriority } from "@shared/types";
 import { db, schema } from "../db/index";
 import {
   createJob,
@@ -49,55 +44,63 @@ interface Extraction {
   isRecruitment: boolean;
   company: string;
   position: string;
+  location: string;
+  workMode: string;
+  contractType: string;
+  salaryMin: string;
+  salaryMax: string;
+  currency: string;
+  seniority: string;
+  technologies: string[];
+  responsibilities: string[];
+  requirements: string[];
+  benefits: string[];
+  recruiterName: string;
+  recruiterCompany: string;
+  recruiterContact: string;
+  sourceUrl: string;
   stage: string;
-  contractType?: string | null;
-  rate?: string | null;
-  salaryRange?: string | null;
-  workModel?: string | null;
-  location?: string | null;
-  techStack?: string[] | null;
-  recruiterName?: string | null;
-  agency?: string | null;
-  jobPostUrl?: string | null;
-  priority?: string | null;
-  nextAction?: string | null;
-  nextActionDue?: string | null;
-  flags?: string | null;
-  companyNotes?: string | null;
-  notes?: string | null;
-  isTechInterview?: boolean | null;
-  studyTopics?: string[] | null;
-  hesitations?: string[] | null;
-  concepts?: string[] | null;
+  nextAction: string;
+  deadline: string;
+  notes: string;
+  confidence: string;
+  isTechInterview: boolean;
+  studyTopics: string[];
+  hesitations: string[];
+  concepts: string[];
 }
 
-const EXTRACTION_KEYS = [
+export const REQUIRED_OUTPUT_KEYS = [
   "isRecruitment",
   "company",
   "position",
-  "stage",
-  "contractType",
-  "rate",
-  "salaryRange",
-  "workModel",
   "location",
-  "techStack",
+  "workMode",
+  "contractType",
+  "salaryMin",
+  "salaryMax",
+  "currency",
+  "seniority",
+  "technologies",
+  "responsibilities",
+  "requirements",
+  "benefits",
   "recruiterName",
-  "agency",
-  "jobPostUrl",
-  "priority",
+  "recruiterCompany",
+  "recruiterContact",
+  "sourceUrl",
+  "stage",
   "nextAction",
-  "nextActionDue",
-  "flags",
-  "companyNotes",
+  "deadline",
   "notes",
+  "confidence",
   "isTechInterview",
   "studyTopics",
   "hesitations",
   "concepts",
 ] as const;
 
-export const EXTRACTION_SCHEMA = {
+const EXTRACTION_SCHEMA = {
   name: "recruitment_extraction",
   schema: {
     type: "object" as const,
@@ -106,43 +109,32 @@ export const EXTRACTION_SCHEMA = {
       isRecruitment: { type: "boolean" },
       company: { type: "string" },
       position: { type: "string" },
+      location: { type: "string" },
+      workMode: { type: "string" },
+      contractType: { type: "string" },
+      salaryMin: { type: "string" },
+      salaryMax: { type: "string" },
+      currency: { type: "string" },
+      seniority: { type: "string" },
+      technologies: { type: "array", items: { type: "string" } },
+      responsibilities: { type: "array", items: { type: "string" } },
+      requirements: { type: "array", items: { type: "string" } },
+      benefits: { type: "array", items: { type: "string" } },
+      recruiterName: { type: "string" },
+      recruiterCompany: { type: "string" },
+      recruiterContact: { type: "string" },
+      sourceUrl: { type: "string" },
       stage: { type: "string", enum: [...APPLICATION_STAGES] },
-      contractType: { type: ["string", "null"] },
-      rate: { type: ["string", "null"] },
-      salaryRange: { type: ["string", "null"] },
-      workModel: { type: ["string", "null"] },
-      location: { type: ["string", "null"] },
-      techStack: {
-        type: ["array", "null"],
-        items: { type: "string" },
-      },
-      recruiterName: { type: ["string", "null"] },
-      agency: { type: ["string", "null"] },
-      jobPostUrl: { type: ["string", "null"] },
-      priority: {
-        type: ["string", "null"],
-        enum: [...STUDY_TOPIC_PRIORITIES, null],
-      },
-      nextAction: { type: ["string", "null"] },
-      nextActionDue: { type: ["string", "null"] },
-      flags: { type: ["string", "null"] },
-      companyNotes: { type: ["string", "null"] },
-      notes: { type: ["string", "null"] },
-      isTechInterview: { type: ["boolean", "null"] },
-      studyTopics: {
-        type: ["array", "null"],
-        items: { type: "string" },
-      },
-      hesitations: {
-        type: ["array", "null"],
-        items: { type: "string" },
-      },
-      concepts: {
-        type: ["array", "null"],
-        items: { type: "string" },
-      },
+      nextAction: { type: "string" },
+      deadline: { type: "string" },
+      notes: { type: "string" },
+      confidence: { type: "string" },
+      isTechInterview: { type: "boolean" },
+      studyTopics: { type: "array", items: { type: "string" } },
+      hesitations: { type: "array", items: { type: "string" } },
+      concepts: { type: "array", items: { type: "string" } },
     },
-    required: [...EXTRACTION_KEYS],
+    required: [...REQUIRED_OUTPUT_KEYS],
   },
 };
 
@@ -174,21 +166,19 @@ function normalizeStage(stage?: string): ApplicationStage {
     : "applied";
 }
 
-export function buildPrompt(kind: string, rawText: string): string {
+function buildPrompt(kind: string, rawText: string): string {
   return `You are Jakub's recruitment intake analyst. Extract structured data from the raw material below (a ${kind}). Polish or English input.
 
-Return one JSON object with exactly these keys:
-${EXTRACTION_KEYS.join(", ")}
-
 RULES:
-- Do NOT invent. If a required identity field is not present, return an empty string. For optional fields, return null or an empty array. Never guess company, position, rate, or recruiterName.
-- "company": legal/company name for the opportunity, or "" if not present.
-- "position": role/title, or "" if not present.
+- Return JSON with exactly these keys:
+${REQUIRED_OUTPUT_KEYS.join(", ")}.
+- Do NOT invent. If a field is not present, return an empty string (or empty array, or false for booleans). Never guess a company, rate, or name.
 - "stage" MUST be one of the enum values. If unclear, use "applied".
 - "isRecruitment": false if this is clearly NOT about a job opportunity (e.g. a private call, a video, unrelated chatter).
 - If this is a technical/HR interview transcript, set "isTechInterview": true and fill studyTopics (concepts to study), hesitations (where the candidate struggled), concepts (technical terms mentioned).
-- "nextAction": one concrete next step for Jakub. "nextActionDue": ISO date if a deadline is implied.
-- "flags": red/green flags, format "🟢 ... | 🔴 ...". "companyNotes": 2-3 sentence summary of the company.
+- "nextAction": one concrete next step for Jakub.
+- "deadline": ISO date if a deadline is implied, otherwise empty string.
+- Use "notes" for recruiter context, red flags, and useful caveats.
 
 RAW MATERIAL:
 ${rawText.slice(0, 40000)}`;
@@ -208,27 +198,77 @@ async function extract(kind: string, rawText: string): Promise<Extraction> {
   if (!result.data) {
     throw new Error("LLM extraction returned no data");
   }
-  return result.data;
+  const fallback = result.data as unknown as Record<string, unknown>;
+  return {
+    isRecruitment: result.data.isRecruitment === true,
+    company: result.data.company ?? "",
+    position: result.data.position ?? "",
+    location: result.data.location ?? "",
+    workMode:
+      result.data.workMode ??
+      (typeof fallback.workModel === "string" ? fallback.workModel : ""),
+    contractType: result.data.contractType ?? "",
+    salaryMin: result.data.salaryMin ?? "",
+    salaryMax: result.data.salaryMax ?? "",
+    currency: result.data.currency ?? "",
+    seniority: result.data.seniority ?? "",
+    technologies: Array.isArray(result.data.technologies)
+      ? result.data.technologies
+      : Array.isArray(fallback.techStack)
+        ? (fallback.techStack as string[])
+        : [],
+    responsibilities: result.data.responsibilities ?? [],
+    requirements: result.data.requirements ?? [],
+    benefits: result.data.benefits ?? [],
+    recruiterName: result.data.recruiterName ?? "",
+    recruiterCompany:
+      result.data.recruiterCompany ??
+      (typeof fallback.agency === "string" ? fallback.agency : "") ??
+      "",
+    recruiterContact: result.data.recruiterContact ?? "",
+    sourceUrl:
+      result.data.sourceUrl ??
+      (typeof fallback.jobPostUrl === "string" ? fallback.jobPostUrl : "") ??
+      "",
+    stage: result.data.stage ?? "applied",
+    nextAction: result.data.nextAction ?? "",
+    deadline:
+      result.data.deadline ??
+      (typeof fallback.nextActionDue === "string"
+        ? fallback.nextActionDue
+        : "") ??
+      "",
+    notes:
+      result.data.notes ??
+      (typeof fallback.flags === "string" ? fallback.flags : "") ??
+      "",
+    confidence: result.data.confidence ?? "",
+    isTechInterview: result.data.isTechInterview === true,
+    studyTopics: result.data.studyTopics ?? [],
+    hesitations: result.data.hesitations ?? [],
+    concepts: result.data.concepts ?? [],
+  };
 }
 
 function noteBody(ex: Extraction, kind: string): string {
+  const salaryRange = [ex.salaryMin, ex.salaryMax].filter(Boolean).join("-");
   const lines = [
     `Source: ${kind}`,
     ex.recruiterName ? `Contact: ${ex.recruiterName}` : null,
-    ex.agency ? `Agency: ${ex.agency}` : null,
+    ex.recruiterCompany ? `Agency: ${ex.recruiterCompany}` : null,
+    ex.recruiterContact ? `Recruiter contact: ${ex.recruiterContact}` : null,
     ex.contractType ? `Contract: ${ex.contractType}` : null,
-    ex.rate ? `Rate: ${ex.rate}` : null,
-    ex.salaryRange ? `Range: ${ex.salaryRange}` : null,
-    ex.workModel ? `Work model: ${ex.workModel}` : null,
-    ex.flags ? `Flags: ${ex.flags}` : null,
-    ex.companyNotes ? `\n${ex.companyNotes}` : null,
+    salaryRange ? `Range: ${salaryRange} ${ex.currency}`.trim() : null,
+    ex.workMode ? `Work mode: ${ex.workMode}` : null,
+    ex.seniority ? `Seniority: ${ex.seniority}` : null,
+    ex.technologies.length ? `Tech: ${ex.technologies.join(", ")}` : null,
     ex.notes ? `\n${ex.notes}` : null,
   ].filter(Boolean);
   return lines.join("\n");
 }
 
-function isRemote(workModel?: string): boolean | undefined {
-  const v = clean(workModel)?.toLowerCase();
+function isRemote(workMode?: string): boolean | undefined {
+  const v = clean(workMode)?.toLowerCase();
   if (!v) return undefined;
   if (v.includes("remote") || v.includes("zdaln")) return true;
   return false;
@@ -279,6 +319,14 @@ function channelSource(kind: string): string {
   return "recruiter";
 }
 
+function toSalaryDisplay(ex: Extraction): string | undefined {
+  const salaryParts = [clean(ex.salaryMin), clean(ex.salaryMax)].filter(Boolean);
+  if (salaryParts.length === 0) return undefined;
+  const range = salaryParts.join("-");
+  const currency = clean(ex.currency);
+  return currency ? `${range} ${currency}` : range;
+}
+
 export async function processIntake(intakeId: string): Promise<IntakeResult> {
   const row = await intakeRepo.getById(intakeId);
   if (!row) return { intakeId, action: "skipped", reason: "not found" };
@@ -308,17 +356,20 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
     }
 
     const jobUrl = `recruitment://${slug(company)}-${slug(position)}`;
-    const { score, priority, reasons } = scoreRecruitment({
-      rate: clean(ex.rate),
-      salaryRange: clean(ex.salaryRange),
-      workModel: clean(ex.workModel),
-      techStack: ex.techStack ?? undefined,
-      flags: clean(ex.flags),
-      notes: clean(ex.notes),
-    });
-    const suitabilityReason = [clean(ex.flags), reasons.join("; ") || undefined]
+    const salaryRange = [clean(ex.salaryMin), clean(ex.salaryMax)]
       .filter(Boolean)
-      .join(" — ");
+      .join("-");
+    const { score, priority, reasons } = scoreRecruitment({
+      rate: clean(ex.salaryMax) ?? clean(ex.salaryMin),
+      salaryRange,
+      workModel: ex.workMode,
+      techStack: ex.technologies,
+      flags: clean(ex.notes),
+      notes: ex.notes,
+    });
+    const suitabilityReason = [clean(ex.notes), reasons.join("; ") || undefined]
+      .filter(Boolean)
+      .join(" - ");
     const stage = normalizeStage(ex.stage);
     const existing = await getJobByUrl(jobUrl);
 
@@ -328,8 +379,8 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
     if (existing) {
       await updateJob(existing.id, {
         location: clean(ex.location) ?? undefined,
-        salary: clean(ex.salaryRange) ?? clean(ex.rate) ?? undefined,
-        isRemote: isRemote(clean(ex.workModel)),
+        salary: toSalaryDisplay(ex),
+        isRemote: isRemote(ex.workMode),
         suitabilityScore: score,
         suitabilityReason: suitabilityReason || undefined,
       });
@@ -347,10 +398,10 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
         employer: company,
         jobUrl,
         location: clean(ex.location),
-        salary: clean(ex.salaryRange) ?? clean(ex.rate),
-        skills: ex.techStack?.length ? ex.techStack.join(", ") : undefined,
-        isRemote: isRemote(clean(ex.workModel)),
-        applicationLink: clean(ex.jobPostUrl),
+        salary: toSalaryDisplay(ex),
+        skills: ex.technologies?.length ? ex.technologies.join(", ") : undefined,
+        isRemote: isRemote(ex.workMode),
+        applicationLink: clean(ex.sourceUrl),
       });
       await updateJob(job.id, {
         suitabilityScore: score,
@@ -369,11 +420,7 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
 
     const nextAction = clean(ex.nextAction);
     if (nextAction) {
-      await createTask(
-        jobId,
-        nextAction,
-        toEpochSeconds(clean(ex.nextActionDue)),
-      );
+      await createTask(jobId, nextAction, toEpochSeconds(ex.deadline));
     }
 
     if (row.kind === "call_transcript" && ex.isTechInterview) {
@@ -399,3 +446,9 @@ export async function processPending(limit = 25): Promise<IntakeResult[]> {
   }
   return results;
 }
+
+export const __testExports = {
+  buildPrompt,
+  EXTRACTION_SCHEMA,
+  REQUIRED_OUTPUT_KEYS,
+};

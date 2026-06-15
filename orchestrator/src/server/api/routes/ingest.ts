@@ -8,13 +8,16 @@
 
 import { createHash } from "node:crypto";
 import { AppError, badRequest } from "@infra/errors";
-import { fail, ok } from "@infra/http";
+import { asyncRoute, fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
+import { runWithRequestContext } from "@infra/request-context";
+import { requireDashboardToken } from "@server/api/dashboard-auth";
 import * as intakeRepo from "@server/repositories/recruitmentIntake";
 import {
 	processIntake,
 	processPending,
 } from "@server/services/recruitment-intake";
+import { DEFAULT_TENANT_ID } from "@server/tenancy/constants";
 import {
 	RECRUITMENT_INTAKE_KINDS,
 	RECRUITMENT_INTAKE_SOURCES,
@@ -49,6 +52,32 @@ function hashContent(text: string): string {
 	const normalized = text.replace(/\s+/g, " ").trim().toLowerCase();
 	return createHash("sha256").update(normalized).digest("hex");
 }
+
+ingestRouter.get(
+	"/dashboard",
+	asyncRoute(async (req: Request, res: Response) => {
+		const hasAuthenticatedUserBearer =
+			(req.headers.authorization ?? "").startsWith("Bearer ");
+		if (!hasAuthenticatedUserBearer) {
+			const auth = requireDashboardToken(req, res);
+			if (!auth.ok) return;
+		}
+
+		const tenantId =
+			process.env.JOBOPS_DASHBOARD_TENANT_ID?.trim() || DEFAULT_TENANT_ID;
+
+		return runWithRequestContext(
+			{ tenantId, username: "dashboard" },
+			async () => {
+				const [items, counts] = await Promise.all([
+					intakeRepo.listRecentForDashboard(),
+					intakeRepo.getDashboardCounts(),
+				]);
+				return ok(res, { items, counts });
+			},
+		);
+	}),
+);
 
 ingestRouter.post("/", async (req: Request, res: Response) => {
 	const parsed = ingestSchema.safeParse(req.body);

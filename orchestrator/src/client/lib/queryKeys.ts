@@ -78,6 +78,9 @@ export const queryKeys = {
     all: ["tasks"] as const,
     yourMove: () => [...queryKeys.tasks.all, "your-move"] as const,
   },
+  recruitmentIntake: {
+    dashboard: ["recruitment-intake", "dashboard"] as const,
+  },
   skillExclusions: {
     all: ["skill-exclusions"] as const,
     list: () => ["skill-exclusions", "list"] as const,

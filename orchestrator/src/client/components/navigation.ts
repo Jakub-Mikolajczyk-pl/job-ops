@@ -55,6 +55,7 @@ export const NAV_LINKS: NavLink[] = [
     activePaths: ["/design-resume"],
   },
   { to: "/tracking-inbox", label: "Tracking Inbox", icon: Inbox },
+  { to: "/recruitment-intake", label: "Recruitment Intake", icon: Inbox },
   {
     to: "/tracer-links",
     label: "Tracer Links",
