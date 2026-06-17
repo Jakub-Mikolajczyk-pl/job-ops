@@ -50,28 +50,54 @@ interface Extraction {
   company: string;
   position: string;
   stage: string;
-  contractType?: string;
-  rate?: string;
-  salaryRange?: string;
-  workModel?: string;
-  location?: string;
-  techStack?: string[];
-  recruiterName?: string;
-  agency?: string;
-  jobPostUrl?: string;
-  priority?: string;
-  nextAction?: string;
-  nextActionDue?: string;
-  flags?: string;
-  companyNotes?: string;
-  notes?: string;
-  isTechInterview?: boolean;
-  studyTopics?: string[];
-  hesitations?: string[];
-  concepts?: string[];
+  contractType?: string | null;
+  rate?: string | null;
+  salaryRange?: string | null;
+  workModel?: string | null;
+  location?: string | null;
+  techStack?: string[] | null;
+  recruiterName?: string | null;
+  agency?: string | null;
+  jobPostUrl?: string | null;
+  priority?: string | null;
+  nextAction?: string | null;
+  nextActionDue?: string | null;
+  flags?: string | null;
+  companyNotes?: string | null;
+  notes?: string | null;
+  isTechInterview?: boolean | null;
+  studyTopics?: string[] | null;
+  hesitations?: string[] | null;
+  concepts?: string[] | null;
 }
 
-const EXTRACTION_SCHEMA = {
+const EXTRACTION_KEYS = [
+  "isRecruitment",
+  "company",
+  "position",
+  "stage",
+  "contractType",
+  "rate",
+  "salaryRange",
+  "workModel",
+  "location",
+  "techStack",
+  "recruiterName",
+  "agency",
+  "jobPostUrl",
+  "priority",
+  "nextAction",
+  "nextActionDue",
+  "flags",
+  "companyNotes",
+  "notes",
+  "isTechInterview",
+  "studyTopics",
+  "hesitations",
+  "concepts",
+] as const;
+
+export const EXTRACTION_SCHEMA = {
   name: "recruitment_extraction",
   schema: {
     type: "object" as const,
@@ -81,29 +107,43 @@ const EXTRACTION_SCHEMA = {
       company: { type: "string" },
       position: { type: "string" },
       stage: { type: "string", enum: [...APPLICATION_STAGES] },
-      contractType: { type: "string" },
-      rate: { type: "string" },
-      salaryRange: { type: "string" },
-      workModel: { type: "string" },
-      location: { type: "string" },
-      techStack: { type: "array", items: { type: "string" } },
-      recruiterName: { type: "string" },
-      agency: { type: "string" },
-      jobPostUrl: { type: "string" },
-      priority: { type: "string", enum: [...STUDY_TOPIC_PRIORITIES] },
-      nextAction: { type: "string" },
-      nextActionDue: { type: "string" },
-      flags: { type: "string" },
-      companyNotes: { type: "string" },
-      notes: { type: "string" },
-      isTechInterview: { type: "boolean" },
-      studyTopics: { type: "array", items: { type: "string" } },
-      hesitations: { type: "array", items: { type: "string" } },
-      concepts: { type: "array", items: { type: "string" } },
+      contractType: { type: ["string", "null"] },
+      rate: { type: ["string", "null"] },
+      salaryRange: { type: ["string", "null"] },
+      workModel: { type: ["string", "null"] },
+      location: { type: ["string", "null"] },
+      techStack: {
+        type: ["array", "null"],
+        items: { type: "string" },
+      },
+      recruiterName: { type: ["string", "null"] },
+      agency: { type: ["string", "null"] },
+      jobPostUrl: { type: ["string", "null"] },
+      priority: {
+        type: ["string", "null"],
+        enum: [...STUDY_TOPIC_PRIORITIES, null],
+      },
+      nextAction: { type: ["string", "null"] },
+      nextActionDue: { type: ["string", "null"] },
+      flags: { type: ["string", "null"] },
+      companyNotes: { type: ["string", "null"] },
+      notes: { type: ["string", "null"] },
+      isTechInterview: { type: ["boolean", "null"] },
+      studyTopics: {
+        type: ["array", "null"],
+        items: { type: "string" },
+      },
+      hesitations: {
+        type: ["array", "null"],
+        items: { type: "string" },
+      },
+      concepts: {
+        type: ["array", "null"],
+        items: { type: "string" },
+      },
     },
-    required: ["isRecruitment", "company", "position", "stage"],
+    required: [...EXTRACTION_KEYS],
   },
-  additionalProperties: false,
 };
 
 function slug(value: string): string {
@@ -134,11 +174,16 @@ function normalizeStage(stage?: string): ApplicationStage {
     : "applied";
 }
 
-function buildPrompt(kind: string, rawText: string): string {
+export function buildPrompt(kind: string, rawText: string): string {
   return `You are Jakub's recruitment intake analyst. Extract structured data from the raw material below (a ${kind}). Polish or English input.
 
+Return one JSON object with exactly these keys:
+${EXTRACTION_KEYS.join(", ")}
+
 RULES:
-- Do NOT invent. If a field is not present, return an empty string (or empty array). Never guess a company, rate, or name.
+- Do NOT invent. If a required identity field is not present, return an empty string. For optional fields, return null or an empty array. Never guess company, position, rate, or recruiterName.
+- "company": legal/company name for the opportunity, or "" if not present.
+- "position": role/title, or "" if not present.
 - "stage" MUST be one of the enum values. If unclear, use "applied".
 - "isRecruitment": false if this is clearly NOT about a job opportunity (e.g. a private call, a video, unrelated chatter).
 - If this is a technical/HR interview transcript, set "isTechInterview": true and fill studyTopics (concepts to study), hesitations (where the candidate struggled), concepts (technical terms mentioned).
@@ -264,12 +309,12 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
 
     const jobUrl = `recruitment://${slug(company)}-${slug(position)}`;
     const { score, priority, reasons } = scoreRecruitment({
-      rate: ex.rate,
-      salaryRange: ex.salaryRange,
-      workModel: ex.workModel,
-      techStack: ex.techStack,
-      flags: ex.flags,
-      notes: ex.notes,
+      rate: clean(ex.rate),
+      salaryRange: clean(ex.salaryRange),
+      workModel: clean(ex.workModel),
+      techStack: ex.techStack ?? undefined,
+      flags: clean(ex.flags),
+      notes: clean(ex.notes),
     });
     const suitabilityReason = [clean(ex.flags), reasons.join("; ") || undefined]
       .filter(Boolean)
@@ -284,7 +329,7 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
       await updateJob(existing.id, {
         location: clean(ex.location) ?? undefined,
         salary: clean(ex.salaryRange) ?? clean(ex.rate) ?? undefined,
-        isRemote: isRemote(ex.workModel),
+        isRemote: isRemote(clean(ex.workModel)),
         suitabilityScore: score,
         suitabilityReason: suitabilityReason || undefined,
       });
@@ -304,7 +349,7 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
         location: clean(ex.location),
         salary: clean(ex.salaryRange) ?? clean(ex.rate),
         skills: ex.techStack?.length ? ex.techStack.join(", ") : undefined,
-        isRemote: isRemote(ex.workModel),
+        isRemote: isRemote(clean(ex.workModel)),
         applicationLink: clean(ex.jobPostUrl),
       });
       await updateJob(job.id, {
@@ -324,7 +369,11 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
 
     const nextAction = clean(ex.nextAction);
     if (nextAction) {
-      await createTask(jobId, nextAction, toEpochSeconds(ex.nextActionDue));
+      await createTask(
+        jobId,
+        nextAction,
+        toEpochSeconds(clean(ex.nextActionDue)),
+      );
     }
 
     if (row.kind === "call_transcript" && ex.isTechInterview) {
