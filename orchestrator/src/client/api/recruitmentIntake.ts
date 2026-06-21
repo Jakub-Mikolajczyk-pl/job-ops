@@ -10,6 +10,25 @@ export async function fetchRecruitmentIntakeDashboard(): Promise<RecruitmentInta
   return fetchApi<RecruitmentIntakeDashboard>("/ingest/dashboard");
 }
 
+/**
+ * Paste a recruiter offer (no URL needed) into the intake pipeline, then run
+ * extraction on it. Returns the new intake id so the caller can refresh.
+ */
+export async function createAndProcessRecruitmentIntake(
+  text: string,
+  kind: RecruitmentIntakeKind,
+): Promise<{ intakeId: string }> {
+  const created = await fetchApi<{ intakeId: string; deduped: boolean }>(
+    "/ingest",
+    {
+      method: "POST",
+      body: JSON.stringify({ source: "manual", kind, text }),
+    },
+  );
+  await reprocessRecruitmentIntake(created.intakeId);
+  return { intakeId: created.intakeId };
+}
+
 export interface RecruitmentIntakeRow {
   id: string;
   source: RecruitmentIntakeSource;

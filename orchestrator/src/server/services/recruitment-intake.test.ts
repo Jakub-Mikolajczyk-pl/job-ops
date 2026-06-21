@@ -241,4 +241,21 @@ describe.sequential("Recruitment intake worker (R2)", () => {
 			),
 		).toBe(true);
 	});
+
+	it("accepts a manually pasted offer (source=manual) and creates a job", async () => {
+		h.extraction = {
+			isRecruitment: true,
+			company: "LTI Mindtree",
+			position: "Java Full Stack Developer",
+			stage: "applied",
+		};
+		const id = await ingest({
+			source: "manual",
+			kind: "linkedin_msg",
+			text: "Java Full stack developer, Remote Poland, FTE, client LTM (LTI Mindtree).",
+		});
+		const result = await process(id);
+		expect(result.action).toBe("created");
+		expect(typeof result.jobId).toBe("string");
+	});
 });

@@ -1,6 +1,7 @@
 import { PageHeader, PageMain } from "@client/components/layout";
 import type {
   RecruitmentIntakeDashboardItem,
+  RecruitmentIntakeKind,
   RecruitmentIntakeSource,
 } from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import {
   ListFilter,
   Pencil,
   Play,
+  Plus,
   RefreshCcw,
   Trash2,
   X,
@@ -57,6 +59,8 @@ export function RecruitmentIntakePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [addText, setAddText] = useState("");
+  const [addKind, setAddKind] = useState<RecruitmentIntakeKind>("linkedin_msg");
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: queryKeys.recruitmentIntake.dashboard,
@@ -67,6 +71,22 @@ export function RecruitmentIntakePage() {
     queryClient.invalidateQueries({
       queryKey: queryKeys.recruitmentIntake.dashboard,
     });
+
+  const addOffer = useMutation({
+    mutationFn: ({
+      text,
+      kind,
+    }: {
+      text: string;
+      kind: RecruitmentIntakeKind;
+    }) => api.createAndProcessRecruitmentIntake(text, kind),
+    onSuccess: () => {
+      toast.success("Added and analyzed");
+      setAddText("");
+      void invalidate();
+    },
+    onError: (error) => showErrorToast(error, "Could not add offer"),
+  });
 
   const reprocess = useMutation({
     mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
@@ -145,6 +165,48 @@ export function RecruitmentIntakePage() {
             />
             <CounterCard label="Error" value={data?.counts.error ?? 0} />
           </div>
+
+          <section className="space-y-2 rounded-lg border bg-card p-4">
+            <h2 className="text-sm font-semibold">Paste an offer</h2>
+            <p className="text-xs text-muted-foreground">
+              Paste a recruiter message, email, or job description — no link
+              needed. It's analyzed into a tracked job (company, role, salary,
+              next step).
+            </p>
+            <textarea
+              value={addText}
+              onChange={(e) => setAddText(e.target.value)}
+              rows={5}
+              className="w-full rounded-md border bg-background p-2 text-sm"
+              placeholder="Paste the recruiter's message here…"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={addKind}
+                onChange={(e) =>
+                  setAddKind(e.target.value as RecruitmentIntakeKind)
+                }
+                className="rounded-md border bg-background px-2 py-2 text-sm"
+              >
+                <option value="linkedin_msg">LinkedIn message</option>
+                <option value="recruiter_email">Recruiter email</option>
+                <option value="note">Note</option>
+                <option value="job_post">Job post</option>
+                <option value="call_transcript">Call transcript</option>
+              </select>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-md border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                disabled={addOffer.isPending || addText.trim().length === 0}
+                onClick={() =>
+                  addOffer.mutate({ text: addText, kind: addKind })
+                }
+              >
+                <Plus className="h-4 w-4" />
+                {addOffer.isPending ? "Analyzing…" : "Add & analyze"}
+              </button>
+            </div>
+          </section>
 
           {(data?.jobs?.length ?? 0) > 0 && (
             <section className="space-y-2">
