@@ -18,8 +18,8 @@ export type JobStatus =
 // automatic deadline sweep). Once applied, expiry of the posting is tracked
 // through application outcomes instead.
 export const EXPIRABLE_JOB_STATUSES: readonly JobStatus[] = [
-	"discovered",
-	"ready",
+  "discovered",
+  "ready",
 ];
 
 export const APPLICATION_STAGES = [
@@ -194,6 +194,7 @@ export interface YourMove {
 export interface RecruitmentIntakeDashboardItem {
   id: string;
   source: RecruitmentIntakeSource;
+  kind: RecruitmentIntakeKind;
   status: RecruitmentIntakeStatus;
   hash: string;
   createdAt: string;
@@ -211,9 +212,30 @@ export interface RecruitmentIntakeDashboardCounts {
   error: number;
 }
 
+/**
+ * A job created from the recruitment-intake pipeline (synthetic
+ * `recruitment://` URL), surfaced on the intake page so recruiter offers don't
+ * get lost among scraped jobs on the main board.
+ */
+export type RecruitmentJobItem = Pick<
+  Job,
+  | "id"
+  | "title"
+  | "employer"
+  | "status"
+  | "source"
+  | "jobUrl"
+  | "location"
+  | "salary"
+  | "suitabilityScore"
+  | "discoveredAt"
+  | "appliedAt"
+>;
+
 export interface RecruitmentIntakeDashboard {
   items: RecruitmentIntakeDashboardItem[];
   counts: RecruitmentIntakeDashboardCounts;
+  jobs: RecruitmentJobItem[];
 }
 
 export interface Interview {

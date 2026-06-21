@@ -115,6 +115,7 @@ export async function listRecentForDashboard(
   return rows.map((row) => ({
     id: row.id,
     source: row.source as RecruitmentIntakeSource,
+    kind: row.kind as RecruitmentIntakeKind,
     status: row.status as RecruitmentIntakeStatus,
     hash: row.contentHash,
     createdAt: row.createdAt,
@@ -170,5 +171,47 @@ export async function markStatus(
         ? { errorMessage: patch.errorMessage }
         : {}),
     })
+    .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
+}
+
+/** Delete a single intake row (e.g. junk like a bot `/start` command). */
+export async function deleteIntake(id: string): Promise<void> {
+  const tenantId = getActiveTenantId();
+  await db
+    .delete(rawIntake)
+    .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
+}
+
+/**
+ * Replace a row's raw text (after a manual fix), recompute its dedup hash, and
+ * reset it to `pending` so the worker re-extracts it cleanly.
+ */
+export async function updateRawText(
+  id: string,
+  rawText: string,
+  contentHash: string,
+): Promise<void> {
+  const tenantId = getActiveTenantId();
+  await db
+    .update(rawIntake)
+    .set({
+      rawText,
+      contentHash,
+      status: "pending",
+      errorMessage: null,
+      processedAt: null,
+    })
+    .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
+}
+
+/**
+ * Re-arm a stuck row (`error` / `needs_review`, or a `processed` row being
+ * force-rerun) for another extraction pass without touching its text.
+ */
+export async function resetForReprocess(id: string): Promise<void> {
+  const tenantId = getActiveTenantId();
+  await db
+    .update(rawIntake)
+    .set({ status: "pending", errorMessage: null, processedAt: null })
     .where(and(eq(rawIntake.id, id), eq(rawIntake.tenantId, tenantId)));
 }

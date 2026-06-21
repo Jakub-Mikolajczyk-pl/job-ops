@@ -154,4 +154,85 @@ describe.sequential("Ingest API routes", () => {
 			),
 		).toBe(false);
 	});
+
+	it("fetches a single intake row in full", async () => {
+		const created = await (await post(sample)).json();
+		const res = await fetch(`${baseUrl}/api/ingest/${created.data.intakeId}`);
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.ok).toBe(true);
+		expect(body.data).toMatchObject({
+			id: created.data.intakeId,
+			source: "telegram",
+			kind: "linkedin_msg",
+			status: "pending",
+			rawText: sample.text,
+		});
+	});
+
+	it("edits raw text, resets to pending, and changes the dedup hash", async () => {
+		const created = await (await post(sample)).json();
+		const id = created.data.intakeId;
+
+		const res = await fetch(`${baseUrl}/api/ingest/${id}`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				rawText: "Firma: ING. Stanowisko: FullStack Developer. 135 PLN/h B2B.",
+			}),
+		});
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.data.status).toBe("pending");
+
+		const after = await (await fetch(`${baseUrl}/api/ingest/${id}`)).json();
+		expect(after.data.rawText).toContain("FullStack Developer");
+	});
+
+	it("rejects an edit that collides with another row's text (409)", async () => {
+		const a = await (await post(sample)).json();
+		await post({ ...sample, text: "A completely different recruiter note." });
+
+		const res = await fetch(`${baseUrl}/api/ingest/${a.data.intakeId}`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				rawText: "A completely different recruiter note.",
+			}),
+		});
+		expect(res.status).toBe(409);
+		const body = await res.json();
+		expect(body.ok).toBe(false);
+		expect(body.error.code).toBe("CONFLICT");
+	});
+
+	it("deletes an intake row", async () => {
+		const created = await (await post(sample)).json();
+		const id = created.data.intakeId;
+
+		const del = await fetch(`${baseUrl}/api/ingest/${id}`, {
+			method: "DELETE",
+		});
+		expect(del.status).toBe(200);
+		const delBody = await del.json();
+		expect(delBody.data.deleted).toBe(true);
+
+		const after = await fetch(`${baseUrl}/api/ingest/${id}`);
+		expect(after.status).toBe(404);
+	});
+
+	it("returns 404 for edit/delete/process on a missing row", async () => {
+		const missing = `${baseUrl}/api/ingest/does-not-exist`;
+		expect((await fetch(missing)).status).toBe(404);
+		expect((await fetch(missing, { method: "DELETE" })).status).toBe(404);
+		expect(
+			(
+				await fetch(`${missing}/process`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({}),
+				})
+			).status,
+		).toBe(404);
+	});
 });

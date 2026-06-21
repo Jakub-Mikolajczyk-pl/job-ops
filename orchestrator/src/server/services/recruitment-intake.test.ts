@@ -102,6 +102,32 @@ describe.sequential("Recruitment intake worker (R2)", () => {
 		expect(result.action).toBe("needs_review");
 	});
 
+	it("re-runs a needs_review row when reprocessed (route re-arms it)", async () => {
+		h.extraction = {
+			isRecruitment: true,
+			company: "",
+			position: "",
+			stage: "applied",
+		};
+		const id = await ingest({
+			source: "telegram",
+			kind: "linkedin_msg",
+			text: "Ambiguous role note that first fails extraction.",
+		});
+		expect((await process(id)).action).toBe("needs_review");
+
+		// Extraction now succeeds; re-hitting /process re-arms the stuck row.
+		h.extraction = {
+			isRecruitment: true,
+			company: "ING",
+			position: "FullStack Developer",
+			stage: "applied",
+		};
+		const rerun = await process(id);
+		expect(rerun.action).toBe("created");
+		expect(typeof rerun.jobId).toBe("string");
+	});
+
 	it("keeps the extraction schema strict and fully required", () => {
 		const propertyKeys = Object.keys(
 			__testExports.EXTRACTION_SCHEMA.schema.properties,
@@ -185,5 +211,34 @@ describe.sequential("Recruitment intake worker (R2)", () => {
 		const body = await res.json();
 		expect(body.ok).toBe(true);
 		expect(body.data.processed).toBeGreaterThanOrEqual(2);
+	});
+
+	it("surfaces intake-created jobs on the dashboard", async () => {
+		h.extraction = {
+			isRecruitment: true,
+			company: "Helix Labs",
+			position: "Staff Engineer",
+			stage: "applied",
+		};
+		const id = await ingest({
+			source: "telegram",
+			kind: "linkedin_msg",
+			text: "Recruiter offer: Staff Engineer at Helix Labs.",
+		});
+		await process(id);
+
+		const res = await fetch(`${baseUrl}/api/ingest/dashboard`, {
+			headers: { authorization: "Bearer any-user" },
+		});
+		const body = await res.json();
+		expect(body.ok).toBe(true);
+		expect(Array.isArray(body.data.jobs)).toBe(true);
+		expect(
+			body.data.jobs.some(
+				(job: { employer: string; jobUrl: string }) =>
+					job.employer === "Helix Labs" &&
+					job.jobUrl.startsWith("recruitment://"),
+			),
+		).toBe(true);
 	});
 });
