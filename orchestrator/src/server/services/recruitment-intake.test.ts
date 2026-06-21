@@ -68,6 +68,44 @@ describe.sequential("Recruitment intake worker (R2)", () => {
 		expect(typeof result.jobId).toBe("string");
 	});
 
+	it("preserves a pasted offer and does not mark it applied without evidence", async () => {
+		h.extraction = {
+			isRecruitment: true,
+			company: "Elisity",
+			position: "Full stack AI Engineer",
+			stage: "no_change",
+		};
+		const rawText = [
+			"Full stack AI Engineer at Elisity.",
+			"Build Java services, Kafka event streaming, Postgres, React and Playwright automation.",
+			"This is the complete pasted offer and must remain available as the job description.",
+		].join("\n\n");
+		const id = await ingest({
+			source: "telegram_brain_intake",
+			kind: "linkedin_msg",
+			text: rawText,
+		});
+
+		const result = await process(id);
+		const { db, schema } = await import("../db/index");
+		const { eq } = await import("drizzle-orm");
+		const job = await db
+			.select()
+			.from(schema.jobs)
+			.where(eq(schema.jobs.id, result.jobId as string))
+			.get();
+		const stages = await db
+			.select()
+			.from(schema.stageEvents)
+			.where(eq(schema.stageEvents.applicationId, result.jobId as string));
+
+		expect(result.action).toBe("created");
+		expect(job?.jobDescription).toBe(rawText);
+		expect(job?.status).toBe("discovered");
+		expect(job?.appliedAt).toBeNull();
+		expect(stages).toHaveLength(0);
+	});
+
 	it("is idempotent: re-processing a done row is skipped", async () => {
 		h.extraction = {
 			isRecruitment: true,

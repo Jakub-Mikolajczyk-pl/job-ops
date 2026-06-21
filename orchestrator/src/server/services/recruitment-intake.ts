@@ -14,6 +14,7 @@ import { logger } from "@infra/logger";
 import {
   APPLICATION_STAGES,
   type ApplicationStage,
+  type StageTransitionTarget,
   type StudyTopicPriority,
 } from "@shared/types";
 import { db, schema } from "../db/index";
@@ -128,7 +129,10 @@ const EXTRACTION_SCHEMA = {
       recruiterCompany: { type: "string" },
       recruiterContact: { type: "string" },
       sourceUrl: { type: "string" },
-      stage: { type: "string", enum: [...APPLICATION_STAGES] },
+      stage: {
+        type: "string",
+        enum: ["no_change", ...APPLICATION_STAGES],
+      },
       nextAction: { type: "string" },
       deadline: { type: "string" },
       notes: { type: "string" },
@@ -164,10 +168,19 @@ function toEpochSeconds(iso?: string): number | undefined {
   return Number.isNaN(ms) ? undefined : Math.floor(ms / 1000);
 }
 
-function normalizeStage(stage?: string): ApplicationStage {
+function normalizeStage(stage?: string): StageTransitionTarget {
+  if (stage === "no_change") return "no_change";
   return (APPLICATION_STAGES as readonly string[]).includes(stage ?? "")
     ? (stage as ApplicationStage)
-    : "applied";
+    : "no_change";
+}
+
+function jobDescriptionFromIntake(
+  kind: string,
+  rawText: string,
+): string | undefined {
+  if (kind === "call_transcript") return undefined;
+  return clean(rawText);
 }
 
 function buildPrompt(kind: string, rawText: string): string {
@@ -182,7 +195,7 @@ ${REQUIRED_OUTPUT_KEYS.join(", ")}.
 - "position": the role/title, even from conversational text — e.g. "na stanowisko FullStack Developer", "szukamy Senior Java Developera" → the role name.
 - Extract company and position whenever they appear ANYWHERE in the text, including a single mention inside a sentence or an interview transcript. Only leave them blank if they are genuinely absent.
 - Polish cues: salary "do 135 PLN/h", "20k netto B2B", "widełki 18-22k" → salaryMin/salaryMax/currency. Contract "B2B"/"UoP"/"zlecenie" → contractType. Work mode "zdalnie"/"100% zdalnie" = remote, "hybrydowo" = hybrid, "stacjonarnie" = on-site.
-- "stage" MUST be one of the enum values. If unclear, use "applied".
+- "stage" MUST be one of the enum values. Use "no_change" unless the text explicitly says Jakub submitted an application or reached a later application stage. A recruiter message, job description, invitation to apply, or introductory outreach alone is "no_change".
 - "isRecruitment": false if this is clearly NOT about a job opportunity (e.g. a private call, a video, unrelated chatter).
 - If this is a technical/HR interview transcript, set "isTechInterview": true and fill studyTopics (concepts to study), hesitations (where the candidate struggled), concepts (technical terms mentioned).
 - "nextAction": one concrete next step for Jakub.
@@ -244,7 +257,7 @@ async function extract(kind: string, rawText: string): Promise<Extraction> {
       result.data.sourceUrl ??
       (typeof fallback.jobPostUrl === "string" ? fallback.jobPostUrl : "") ??
       "",
-    stage: result.data.stage ?? "applied",
+    stage: result.data.stage ?? "no_change",
     nextAction: result.data.nextAction ?? "",
     deadline:
       result.data.deadline ??
@@ -397,6 +410,9 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
         location: clean(ex.location) ?? undefined,
         salary: toSalaryDisplay(ex),
         isRemote: isRemote(ex.workMode),
+        jobDescription:
+          existing.jobDescription ??
+          jobDescriptionFromIntake(row.kind, row.rawText),
         suitabilityScore: score,
         suitabilityReason: suitabilityReason || undefined,
       });
@@ -415,6 +431,7 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
         jobUrl,
         location: clean(ex.location),
         salary: toSalaryDisplay(ex),
+        jobDescription: jobDescriptionFromIntake(row.kind, row.rawText),
         skills: ex.technologies?.length
           ? ex.technologies.join(", ")
           : undefined,
@@ -434,7 +451,9 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
       action = "created";
     }
 
-    transitionStage(jobId, stage);
+    if (stage !== "no_change") {
+      transitionStage(jobId, stage);
+    }
 
     const nextAction = clean(ex.nextAction);
     if (nextAction) {
