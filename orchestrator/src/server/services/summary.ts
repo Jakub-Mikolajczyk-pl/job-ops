@@ -4,6 +4,7 @@
 
 import { logger } from "@infra/logger";
 import type { ResumeProfile } from "@shared/types";
+import { getBragDocumentPromptSection } from "./brag-document";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { createConfiguredLlmService, resolveLlmModel } from "./modelSelection";
 import {
@@ -185,6 +186,7 @@ async function buildTailoringPrompt(
   };
 
   const template = await getEffectivePromptTemplate("tailoringPromptTemplate");
+  const bragDocumentSection = await getBragDocumentPromptSection();
 
   return renderPromptTemplate(template, {
     jobDescription: jd,
@@ -206,6 +208,7 @@ async function buildTailoringPrompt(
     avoidTermsBullet: writingStyle.doNotUse
       ? `- Avoid these words or phrases: ${writingStyle.doNotUse}`
       : "",
+    bragDocumentSection,
   });
 }
 

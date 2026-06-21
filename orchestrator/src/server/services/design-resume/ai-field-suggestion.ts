@@ -7,6 +7,7 @@ import type {
   DesignResumeAiFieldValueType,
   DesignResumeJson,
 } from "@shared/types";
+import { getBragDocumentPromptSection } from "../brag-document";
 import type { JsonSchemaDefinition } from "../llm/types";
 import { createConfiguredLlmService, resolveLlmModel } from "../modelSelection";
 import {
@@ -188,6 +189,7 @@ async function buildPrompt(
   const effectiveConstraints = stripLanguageDirectivesFromConstraints(
     writingStyle.constraints,
   );
+  const bragSection = await getBragDocumentPromptSection();
 
   return [
     "You are helping edit a reusable baseline resume in Resume Studio.",
@@ -208,6 +210,8 @@ async function buildPrompt(
     `User request:\n${truncate(input.prompt, MAX_PROMPT_CHARS)}`,
     "",
     `Resume context JSON:\n${compactResumeContext(input.document)}`,
+    "",
+    bragSection ? truncate(bragSection, MAX_CONTEXT_CHARS) : "",
     "",
     input.field.valueType === "html"
       ? "The suggestion must be simple HTML using only p, ul, ol, li, strong, em, and br tags."

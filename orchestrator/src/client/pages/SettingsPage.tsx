@@ -19,6 +19,7 @@ import {
   validateAndMaybePersistRxResumeMode,
 } from "@client/lib/rxresume-config";
 import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
+import { BragDocumentSection } from "@client/pages/settings/components/BragDocumentSection";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
@@ -135,6 +136,7 @@ type SettingsSectionId =
   | "reactive-resume"
   | "webhooks"
   | "tracer-links"
+  | "brag-document"
   | "environment"
   | "display"
   | "backup"
@@ -231,6 +233,19 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: "Tracer Links",
         description: "Public URL readiness and verification state.",
         searchTerms: ["public url", "verify", "readiness", "health"],
+      },
+      {
+        id: "brag-document",
+        label: "Brag Document",
+        description: "External achievement bullet bank fed into CV authoring.",
+        searchTerms: [
+          "brag",
+          "achievements",
+          "brain-memory",
+          "cv",
+          "resume",
+          "highlights",
+        ],
       },
     ],
   },
@@ -329,6 +344,7 @@ const SECTION_FIELD_MAP: Record<
   ],
   webhooks: ["pipelineWebhookUrl", "jobCompleteWebhookUrl", "webhookSecret"],
   "tracer-links": [],
+  "brag-document": [],
   environment: [
     "ukvisajobsEmail",
     "ukvisajobsPassword",
@@ -1614,6 +1630,9 @@ export const SettingsPage: React.FC = () => {
           layoutMode="panel"
         />
       );
+      break;
+    case "brag-document":
+      activeSectionContent = <BragDocumentSection layoutMode="panel" />;
       break;
     case "environment":
       activeSectionContent = (

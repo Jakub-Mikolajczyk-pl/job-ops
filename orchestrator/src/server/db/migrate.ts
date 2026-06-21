@@ -1224,6 +1224,19 @@ const migrations = [
 	`CREATE INDEX IF NOT EXISTS idx_profile_market_snapshots_tenant_date ON profile_market_snapshots(tenant_id, snapshot_date)`,
 	`ALTER TABLE active_employments ADD COLUMN hourly_rate_pln REAL`,
 	`ALTER TABLE active_employments ADD COLUMN monthly_hours INTEGER`,
+
+	// Brag Document: tenant-scoped cache of the external achievement bullet bank
+	// fetched from brain-memory (Forgejo), used as supplementary CV-authoring input.
+	`CREATE TABLE IF NOT EXISTS brag_document (
+    tenant_id TEXT PRIMARY KEY NOT NULL DEFAULT 'tenant_default',
+    source_url TEXT,
+    content TEXT,
+    byte_size INTEGER,
+    fetched_at TEXT,
+    last_error TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+  )`,
 ];
 
 console.log("🔧 Running database migrations...");

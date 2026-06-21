@@ -25,6 +25,7 @@ import type { Job, JobDocument, ResumeProfile } from "@shared/types";
 import * as jobDocumentsRepo from "../repositories/job-documents";
 import * as jobsRepo from "../repositories/jobs";
 import * as settingsRepo from "../repositories/settings";
+import { getBragDocumentPromptSection } from "./brag-document";
 import { extractDocxText, extractPdfText } from "./document-text-extraction";
 import {
   getWritingLanguageLabel,
@@ -349,6 +350,7 @@ async function buildSystemPrompt(
   const template = await getEffectivePromptTemplate(
     "ghostwriterSystemPromptTemplate",
   );
+  const bragDocumentSection = await getBragDocumentPromptSection();
 
   return renderPromptTemplate(template, {
     outputLanguage,
@@ -360,6 +362,7 @@ async function buildSystemPrompt(
     avoidTermsSentence: style.doNotUse
       ? `Avoid these terms: ${style.doNotUse}`
       : "",
+    bragDocumentSection,
   });
 }
 

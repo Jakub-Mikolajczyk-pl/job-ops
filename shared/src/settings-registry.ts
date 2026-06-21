@@ -873,6 +873,11 @@ export const settingsRegistry = {
     envKey: "WEBHOOK_SECRET",
     schema: z.string().trim().max(2000),
   },
+  bragDocSourceToken: {
+    kind: "secret" as const,
+    envKey: "BRAG_DOC_SOURCE_TOKEN",
+    schema: z.string().trim().max(2000),
+  },
 
   // --- Aliases ---
   jobspyLocation: {

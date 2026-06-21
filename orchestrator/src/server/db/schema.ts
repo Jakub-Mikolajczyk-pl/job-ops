@@ -1207,3 +1207,22 @@ export type InterviewStudyTopicRow =
 	typeof interviewStudyTopics.$inferSelect;
 export type NewInterviewStudyTopicRow =
 	typeof interviewStudyTopics.$inferInsert;
+
+// Brag Document — tenant-scoped cache of an external achievement bullet bank
+// (sourced from brain-memory), used as supplementary input to CV authoring.
+// One row per tenant; content + sync metadata live here, the read token is a
+// secret in the settings registry. See CONTEXT.md / docs/adr/0001.
+export const bragDocument = sqliteTable("brag_document", {
+	tenantId: text("tenant_id")
+		.primaryKey()
+		.references(() => tenants.id, { onDelete: "cascade" }),
+	sourceUrl: text("source_url"),
+	content: text("content"),
+	byteSize: integer("byte_size"),
+	fetchedAt: text("fetched_at"),
+	lastError: text("last_error"),
+	updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+export type BragDocumentRow = typeof bragDocument.$inferSelect;
+export type NewBragDocumentRow = typeof bragDocument.$inferInsert;

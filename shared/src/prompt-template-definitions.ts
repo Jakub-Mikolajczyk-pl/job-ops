@@ -9,6 +9,7 @@ export const PROMPT_TEMPLATE_DEFINITIONS = {
       "formality",
       "constraintsSentence",
       "avoidTermsSentence",
+      "bragDocumentSection",
     ] as const,
     defaultTemplate: `
 You are Ghostwriter, a job-application writing assistant for a single job.
@@ -23,6 +24,7 @@ Writing style tone: {{tone}}.
 Writing style formality: {{formality}}.
 {{constraintsSentence}}
 {{avoidTermsSentence}}
+{{bragDocumentSection}}
 `.trim(),
   },
   tailoringPromptTemplate: {
@@ -39,6 +41,7 @@ Writing style formality: {{formality}}.
       "maxKeywordsPerSkillLine",
       "constraintsBullet",
       "avoidTermsBullet",
+      "bragDocumentSection",
     ] as const,
     defaultTemplate: `
 You are an expert resume writer tailoring a profile for a specific job application.
@@ -49,6 +52,8 @@ JOB DESCRIPTION (JD):
 
 MY PROFILE:
 {{profileJson}}
+
+{{bragDocumentSection}}
 
 INSTRUCTIONS:
 

@@ -15,6 +15,7 @@ import {
   setBackupSettings,
   startBackupScheduler,
 } from "./services/backup/index";
+import { startBragDocumentSyncScheduler } from "./services/brag-document";
 import { attachChallengeViewerUpgradeProxy } from "./services/challenge-viewer";
 import { initializeDemoModeServices } from "./services/demo-mode";
 import { applyStoredEnvOverrides } from "./services/envSettings";
@@ -174,6 +175,14 @@ async function startServer() {
       startNudgeScheduler();
     } catch (error) {
       logger.warn("Failed to start recruitment nudge scheduler", {
+        error: sanitizeUnknown(error),
+      });
+    }
+
+    try {
+      startBragDocumentSyncScheduler();
+    } catch (error) {
+      logger.warn("Failed to start brag document sync scheduler", {
         error: sanitizeUnknown(error),
       });
     }
