@@ -229,6 +229,15 @@ export function createAuthGuard() {
     );
   }
 
+  function isIngestServiceTokenRoute(method: string, path: string): boolean {
+    if (method.toUpperCase() !== "POST") return false;
+    const normalizedPath = path.split("?")[0] || path;
+    return (
+      normalizedPath === "/api/ingest" ||
+      /^\/api\/ingest\/[^/]+\/process$/.test(normalizedPath)
+    );
+  }
+
   function isProtectedDemoRoute(path: string): boolean {
     const normalizedPath = path.split("?")[0] || path;
 
@@ -314,6 +323,23 @@ export function createAuthGuard() {
               process.env.JOBOPS_DASHBOARD_TENANT_ID?.trim() ||
               DEFAULT_TENANT_ID,
             username: "dashboard",
+          },
+          () => next(),
+        );
+        return;
+      }
+
+      const ingestToken = process.env.JOBOPS_INGEST_TOKEN?.trim();
+      if (
+        ingestToken &&
+        isIngestServiceTokenRoute(req.method, req.path) &&
+        hasValidBearerToken(req, ingestToken)
+      ) {
+        runWithRequestContext(
+          {
+            tenantId:
+              process.env.JOBOPS_INGEST_TENANT_ID?.trim() || DEFAULT_TENANT_ID,
+            username: "brain-intake-router",
           },
           () => next(),
         );

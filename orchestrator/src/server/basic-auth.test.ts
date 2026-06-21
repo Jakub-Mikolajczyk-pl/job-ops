@@ -99,6 +99,45 @@ describe.sequential("Auth read-only enforcement", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it("allows the dedicated ingest token only on Brain Intake POST routes", async () => {
+    process.env.JOBOPS_INGEST_TOKEN = "ingest-service-token";
+    vi.mocked(countUsers).mockResolvedValue(1);
+    const { middleware } = createAuthGuard();
+
+    for (const path of [
+      "/api/ingest",
+      "/api/ingest/intake-123/process",
+    ]) {
+      const req = createMockRequest({
+        method: "POST",
+        path,
+        authorization: buildBearerHeader("ingest-service-token"),
+      });
+      const res = createMockResponse();
+      const next = vi.fn() as NextFunction;
+
+      middleware(req, res, next);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(res.status).not.toHaveBeenCalled();
+    }
+
+    const unrelatedReq = createMockRequest({
+      method: "POST",
+      path: "/api/jobs/actions",
+      authorization: buildBearerHeader("ingest-service-token"),
+    });
+    const unrelatedRes = createMockResponse();
+    const unrelatedNext = vi.fn() as NextFunction;
+
+    middleware(unrelatedReq, unrelatedRes, unrelatedNext);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(unrelatedNext).not.toHaveBeenCalled();
+    expect(unrelatedRes.statusCode).toBe(401);
+  });
+
   it("allows Resume Studio asset content without auth for PDF rendering", async () => {
     vi.mocked(countUsers).mockResolvedValue(1);
 
