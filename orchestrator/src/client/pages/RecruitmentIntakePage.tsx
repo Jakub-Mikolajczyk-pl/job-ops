@@ -3,10 +3,20 @@ import type {
   RecruitmentIntakeDashboardItem,
   RecruitmentIntakeSource,
 } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
-import { Inbox, ListFilter, RefreshCcw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Inbox,
+  ListFilter,
+  Pencil,
+  Play,
+  RefreshCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { showErrorToast } from "@/client/lib/error-toast";
 import * as api from "../api/recruitmentIntake";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -38,12 +48,77 @@ function CounterCard({ label, value }: { label: string; value: number }) {
   );
 }
 
+const actionButton =
+  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50";
+
 export function RecruitmentIntakePage() {
+  const queryClient = useQueryClient();
   const [reviewOnly, setReviewOnly] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: queryKeys.recruitmentIntake.dashboard,
     queryFn: api.fetchRecruitmentIntakeDashboard,
   });
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.recruitmentIntake.dashboard,
+    });
+
+  const reprocess = useMutation({
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+      api.reprocessRecruitmentIntake(id, force),
+    onMutate: ({ id }) => setBusyId(id),
+    onSuccess: () => {
+      toast.success("Re-ran extraction");
+      void invalidate();
+    },
+    onError: (error) => showErrorToast(error, "Re-run failed"),
+    onSettled: () => setBusyId(null),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteRecruitmentIntake(id),
+    onMutate: (id) => setBusyId(id),
+    onSuccess: () => {
+      toast.success("Deleted intake row");
+      void invalidate();
+    },
+    onError: (error) => showErrorToast(error, "Delete failed"),
+    onSettled: () => setBusyId(null),
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: async ({ id, text }: { id: string; text: string }) => {
+      await api.updateRecruitmentIntakeText(id, text);
+      // PATCH re-arms the row as `pending`; immediately re-extract it.
+      return api.reprocessRecruitmentIntake(id);
+    },
+    onMutate: ({ id }) => setBusyId(id),
+    onSuccess: () => {
+      toast.success("Saved and re-extracted");
+      setEditingId(null);
+      setEditText("");
+      void invalidate();
+    },
+    onError: (error) => showErrorToast(error, "Save failed"),
+    onSettled: () => setBusyId(null),
+  });
+
+  async function openEditor(id: string) {
+    setEditingId(id);
+    setEditText("");
+    try {
+      const row = await api.fetchRecruitmentIntakeRow(id);
+      setEditText(row.rawText);
+    } catch (error) {
+      showErrorToast(error, "Could not load row");
+      setEditingId(null);
+    }
+  }
 
   const items = (data?.items ?? []).filter((item) =>
     reviewOnly ? item.status === "needs_review" : true,
@@ -64,9 +139,69 @@ export function RecruitmentIntakePage() {
               label="Needs review"
               value={data?.counts.needsReview ?? 0}
             />
-            <CounterCard label="Processed" value={data?.counts.processed ?? 0} />
+            <CounterCard
+              label="Processed"
+              value={data?.counts.processed ?? 0}
+            />
             <CounterCard label="Error" value={data?.counts.error ?? 0} />
           </div>
+
+          {(data?.jobs?.length ?? 0) > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Jobs from recruiters ({data?.jobs.length})
+              </h2>
+              <div className="overflow-hidden rounded-lg border">
+                <table className="min-w-full divide-y divide-border text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Role</th>
+                      <th className="px-4 py-2 text-left font-medium">
+                        Status
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium">Score</th>
+                      <th className="px-4 py-2 text-left font-medium">
+                        Where / pay
+                      </th>
+                      <th className="px-4 py-2 text-right font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border bg-card">
+                    {data?.jobs.map((job) => (
+                      <tr key={job.id} className="align-top">
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{job.title}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {job.employer}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground">
+                          {job.status}
+                        </td>
+                        <td className="px-4 py-2">
+                          {job.suitabilityScore ?? "—"}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">
+                          {[job.location, job.salary]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <Link className="underline" to={`/job/${job.id}`}>
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Raw intake queue
+          </h2>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -84,7 +219,9 @@ export function RecruitmentIntakePage() {
               onClick={() => void refetch()}
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
             >
-              <RefreshCcw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              <RefreshCcw
+                className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
+              />
               Refresh
             </button>
           </div>
@@ -111,54 +248,154 @@ export function RecruitmentIntakePage() {
                     <th className="px-4 py-3 text-left font-medium">Status</th>
                     <th className="px-4 py-3 text-left font-medium">Preview</th>
                     <th className="px-4 py-3 text-left font-medium">Job</th>
+                    <th className="px-4 py-3 text-right font-medium">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-card">
-                  {items.map((item) => (
-                    <tr key={item.id} className="align-top">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(item.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${sourceBadgeTone(item.source)}`}
-                        >
-                          {item.source}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className={`font-medium ${statusTone(item.status)}`}>
-                          {item.status}
-                        </div>
-                        {item.error && (
+                  {items.map((item) => {
+                    const busy = busyId === item.id;
+                    const canRerun = item.status !== "pending";
+                    return (
+                      <tr key={item.id} className="align-top">
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${sourceBadgeTone(item.source)}`}
+                          >
+                            {item.source}
+                          </span>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {item.error}
+                            {item.kind}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="max-w-xl whitespace-pre-wrap break-words text-sm">
-                          {item.rawTextPreview}
-                        </div>
-                        {item.meta && (
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            {(item.meta.strategy as string | undefined) ?? "unknown strategy"}
-                            {" · "}
-                            {(item.meta.inputMode as string | undefined) ?? "unknown mode"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div
+                            className={`font-medium ${statusTone(item.status)}`}
+                          >
+                            {item.status}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.jobId ? (
-                          <Link className="underline" to={`/job/${item.jobId}`}>
-                            Open job
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">Unresolved</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          {item.error && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {item.error}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editingId === item.id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                rows={8}
+                                className="w-full min-w-[20rem] rounded-md border bg-background p-2 font-mono text-xs"
+                                placeholder="Loading…"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className={actionButton}
+                                  disabled={
+                                    busy || editText.trim().length === 0
+                                  }
+                                  onClick={() =>
+                                    saveEdit.mutate({
+                                      id: item.id,
+                                      text: editText,
+                                    })
+                                  }
+                                >
+                                  Save & re-extract
+                                </button>
+                                <button
+                                  type="button"
+                                  className={actionButton}
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setEditingId(null);
+                                    setEditText("");
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="max-w-xl whitespace-pre-wrap break-words text-sm">
+                              {item.rawTextPreview}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.jobId ? (
+                            <Link
+                              className="underline"
+                              to={`/job/${item.jobId}`}
+                            >
+                              Open job
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Unresolved
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {canRerun && (
+                              <button
+                                type="button"
+                                className={actionButton}
+                                disabled={busy}
+                                title="Re-run extraction"
+                                onClick={() =>
+                                  reprocess.mutate({
+                                    id: item.id,
+                                    force: item.status === "processed",
+                                  })
+                                }
+                              >
+                                <Play className="h-3 w-3" />
+                                Re-run
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={actionButton}
+                              disabled={busy}
+                              title="Edit raw text and re-extract"
+                              onClick={() => void openEditor(item.id)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className={`${actionButton} text-destructive`}
+                              disabled={busy}
+                              title="Delete this row"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "Delete this intake row? This cannot be undone.",
+                                  )
+                                ) {
+                                  remove.mutate(item.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -7,11 +7,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { AppError, badRequest } from "@infra/errors";
+import { AppError, badRequest, conflict, notFound } from "@infra/errors";
 import { asyncRoute, fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import { runWithRequestContext } from "@infra/request-context";
 import { requireDashboardToken } from "@server/api/dashboard-auth";
+import * as jobsRepo from "@server/repositories/jobs";
 import * as intakeRepo from "@server/repositories/recruitmentIntake";
 import {
 	processIntake,
@@ -69,11 +70,12 @@ ingestRouter.get(
 		return runWithRequestContext(
 			{ tenantId, username: "dashboard" },
 			async () => {
-				const [items, counts] = await Promise.all([
+				const [items, counts, jobs] = await Promise.all([
 					intakeRepo.listRecentForDashboard(),
 					intakeRepo.getDashboardCounts(),
+					jobsRepo.getRecruitmentJobs(),
 				]);
-				return ok(res, { items, counts });
+				return ok(res, { items, counts, jobs });
 			},
 		);
 	}),
@@ -196,11 +198,25 @@ ingestRouter.post("/process-pending", async (_req: Request, res: Response) => {
 	}
 });
 
-// Process a single intake row by id (manual trigger).
+/**
+ * Process a single intake row by id (manual trigger). Re-arms a stuck row
+ * (`error` / `needs_review`) so the worker retries it; pass `{ force: true }`
+ * to also re-run an already-`processed` row.
+ */
 ingestRouter.post("/:id/process", async (req: Request, res: Response) => {
 	const id = req.params.id;
 	if (!id) return fail(res, badRequest("Missing intake id"));
+	const force = (req.body as { force?: unknown })?.force === true;
 	try {
+		const row = await intakeRepo.getById(id);
+		if (!row) return fail(res, notFound("Intake not found"));
+		if (
+			row.status === "error" ||
+			row.status === "needs_review" ||
+			(force && row.status === "processed")
+		) {
+			await intakeRepo.resetForReprocess(id);
+		}
 		const result = await processIntake(id);
 		return ok(res, result);
 	} catch (error) {
@@ -211,6 +227,98 @@ ingestRouter.post("/:id/process", async (req: Request, res: Response) => {
 				status: 500,
 				code: "INTERNAL_ERROR",
 				message: "Failed to process intake",
+			}),
+		);
+	}
+});
+
+const patchSchema = z.object({
+	rawText: z.string().trim().min(1).max(200_000),
+});
+
+/** Fetch one intake row in full (raw text) — backs the dashboard edit modal. */
+ingestRouter.get("/:id", async (req: Request, res: Response) => {
+	const id = req.params.id;
+	if (!id) return fail(res, badRequest("Missing intake id"));
+	try {
+		const row = await intakeRepo.getById(id);
+		if (!row) return fail(res, notFound("Intake not found"));
+		return ok(res, {
+			id: row.id,
+			source: row.source,
+			kind: row.kind,
+			status: row.status,
+			rawText: row.rawText,
+			error: row.errorMessage ?? null,
+			jobId: row.jobId ?? null,
+			createdAt: row.createdAt,
+		});
+	} catch (error) {
+		logger.error(`get intake failed (${id}): ${String(error)}`);
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to load intake",
+			}),
+		);
+	}
+});
+
+/** Edit a row's raw text and re-arm it for extraction (manual fix path). */
+ingestRouter.patch("/:id", async (req: Request, res: Response) => {
+	const id = req.params.id;
+	if (!id) return fail(res, badRequest("Missing intake id"));
+	const parsed = patchSchema.safeParse(req.body);
+	if (!parsed.success) {
+		return fail(res, badRequest("Invalid edit payload", parsed.error.flatten()));
+	}
+	try {
+		const row = await intakeRepo.getById(id);
+		if (!row) return fail(res, notFound("Intake not found"));
+		const contentHash = hashContent(parsed.data.rawText);
+		const clash = await intakeRepo.findByHash(contentHash);
+		if (clash && clash.id !== id) {
+			return fail(
+				res,
+				conflict("Another intake row already has this exact text"),
+			);
+		}
+		await intakeRepo.updateRawText(id, parsed.data.rawText, contentHash);
+		logger.info(`intake edited, reset to pending: ${id}`);
+		return ok(res, { intakeId: id, status: "pending" });
+	} catch (error) {
+		logger.error(`edit intake failed (${id}): ${String(error)}`);
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to edit intake",
+			}),
+		);
+	}
+});
+
+/** Delete an intake row (junk / bot noise / unwanted duplicate). */
+ingestRouter.delete("/:id", async (req: Request, res: Response) => {
+	const id = req.params.id;
+	if (!id) return fail(res, badRequest("Missing intake id"));
+	try {
+		const row = await intakeRepo.getById(id);
+		if (!row) return fail(res, notFound("Intake not found"));
+		await intakeRepo.deleteIntake(id);
+		logger.info(`intake deleted: ${id}`);
+		return ok(res, { intakeId: id, deleted: true });
+	} catch (error) {
+		logger.error(`delete intake failed (${id}): ${String(error)}`);
+		return fail(
+			res,
+			new AppError({
+				status: 500,
+				code: "INTERNAL_ERROR",
+				message: "Failed to delete intake",
 			}),
 		);
 	}

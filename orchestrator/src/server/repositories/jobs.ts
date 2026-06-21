@@ -15,6 +15,7 @@ import type {
 	JobPdfSource,
 	JobStatus,
 	JobsRevisionResponse,
+	RecruitmentJobItem,
 	UpdateJobInput,
 	UpdateJobNoteInput,
 } from "@shared/types";
@@ -30,6 +31,7 @@ import {
 	inArray,
 	isNotNull,
 	isNull,
+	like,
 	lt,
 	ne,
 	sql,
@@ -208,6 +210,43 @@ export async function getJobListItems(
 			tracerLinksEnabled: row.tracerLinksEnabled ?? false,
 		};
 	});
+}
+
+/**
+ * Recruitment-intake jobs only (synthetic `recruitment://` URLs), newest first.
+ * Backs the Recruitment Intake page so recruiter offers have a home instead of
+ * being buried among scraped jobs on the main board.
+ */
+export async function getRecruitmentJobs(
+	limit = 100,
+): Promise<RecruitmentJobItem[]> {
+	const tenantId = getActiveTenantId();
+	const rows = await db
+		.select({
+			id: jobs.id,
+			title: jobs.title,
+			employer: jobs.employer,
+			status: jobs.status,
+			source: jobs.source,
+			jobUrl: jobs.jobUrl,
+			location: jobs.location,
+			salary: jobs.salary,
+			suitabilityScore: jobs.suitabilityScore,
+			discoveredAt: jobs.discoveredAt,
+			appliedAt: jobs.appliedAt,
+		})
+		.from(jobs)
+		.where(
+			and(eq(jobs.tenantId, tenantId), like(jobs.jobUrl, "recruitment://%")),
+		)
+		.orderBy(desc(jobs.discoveredAt))
+		.limit(limit);
+
+	return rows.map((row) => ({
+		...row,
+		source: row.source as RecruitmentJobItem["source"],
+		status: row.status as JobStatus,
+	}));
 }
 
 export async function getAppliedDuplicateMatchCandidates(): Promise<

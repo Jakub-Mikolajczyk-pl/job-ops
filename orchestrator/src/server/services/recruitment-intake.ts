@@ -11,7 +11,11 @@
 
 import { randomUUID } from "node:crypto";
 import { logger } from "@infra/logger";
-import { APPLICATION_STAGES, type ApplicationStage, type StudyTopicPriority } from "@shared/types";
+import {
+  APPLICATION_STAGES,
+  type ApplicationStage,
+  type StudyTopicPriority,
+} from "@shared/types";
 import { db, schema } from "../db/index";
 import {
   createJob,
@@ -167,12 +171,17 @@ function normalizeStage(stage?: string): ApplicationStage {
 }
 
 function buildPrompt(kind: string, rawText: string): string {
-  return `You are Jakub's recruitment intake analyst. Extract structured data from the raw material below (a ${kind}). Polish or English input.
+  return `You are Jakub's recruitment intake analyst. Extract structured data from the raw material below (a ${kind}). The input is usually Polish, sometimes English — read Polish fluently.
 
 RULES:
 - Return JSON with exactly these keys:
 ${REQUIRED_OUTPUT_KEYS.join(", ")}.
-- Do NOT invent. If a field is not present, return an empty string (or empty array, or false for booleans). Never guess a company, rate, or name.
+- Do NOT invent. If a field is not present, return an empty string (or empty array, or false for booleans). Never guess a rate or a person's name.
+- "company": the HIRING company (the employer), even when only mentioned in passing — e.g. "w firmie ING" → "ING", "rola w Allegro" → "Allegro". This is NOT the recruitment agency.
+- "recruiterCompany": the agency / pośrednik relaying the offer — e.g. "ze Scalo", "przez kontraktora Scalo" → "Scalo". Keep it separate from "company".
+- "position": the role/title, even from conversational text — e.g. "na stanowisko FullStack Developer", "szukamy Senior Java Developera" → the role name.
+- Extract company and position whenever they appear ANYWHERE in the text, including a single mention inside a sentence or an interview transcript. Only leave them blank if they are genuinely absent.
+- Polish cues: salary "do 135 PLN/h", "20k netto B2B", "widełki 18-22k" → salaryMin/salaryMax/currency. Contract "B2B"/"UoP"/"zlecenie" → contractType. Work mode "zdalnie"/"100% zdalnie" = remote, "hybrydowo" = hybrid, "stacjonarnie" = on-site.
 - "stage" MUST be one of the enum values. If unclear, use "applied".
 - "isRecruitment": false if this is clearly NOT about a job opportunity (e.g. a private call, a video, unrelated chatter).
 - If this is a technical/HR interview transcript, set "isTechInterview": true and fill studyTopics (concepts to study), hesitations (where the candidate struggled), concepts (technical terms mentioned).
@@ -191,6 +200,11 @@ async function extract(kind: string, rawText: string): Promise<Extraction> {
     model,
     messages: [{ role: "user", content: buildPrompt(kind, rawText) }],
     jsonSchema: EXTRACTION_SCHEMA,
+    // Recruiter capture is async/unattended, so ride out transient provider
+    // blips ("fetch failed", timeouts, 429/5xx) instead of dead-ending to
+    // `error` on the first hiccup. Retry policy lives in llm/policies.
+    maxRetries: 2,
+    retryDelayMs: 500,
   });
   if (!result.success) {
     throw new Error(result.error ?? "LLM extraction failed");
@@ -320,7 +334,9 @@ function channelSource(kind: string): string {
 }
 
 function toSalaryDisplay(ex: Extraction): string | undefined {
-  const salaryParts = [clean(ex.salaryMin), clean(ex.salaryMax)].filter(Boolean);
+  const salaryParts = [clean(ex.salaryMin), clean(ex.salaryMax)].filter(
+    Boolean,
+  );
   if (salaryParts.length === 0) return undefined;
   const range = salaryParts.join("-");
   const currency = clean(ex.currency);
@@ -399,7 +415,9 @@ export async function processIntake(intakeId: string): Promise<IntakeResult> {
         jobUrl,
         location: clean(ex.location),
         salary: toSalaryDisplay(ex),
-        skills: ex.technologies?.length ? ex.technologies.join(", ") : undefined,
+        skills: ex.technologies?.length
+          ? ex.technologies.join(", ")
+          : undefined,
         isRemote: isRemote(ex.workMode),
         applicationLink: clean(ex.sourceUrl),
       });
