@@ -19,6 +19,7 @@ import {
 import { logger } from "@infra/logger";
 import { runWithRequestContext } from "@infra/request-context";
 import { sanitizeUnknown } from "@infra/sanitize";
+import { hasValidBearerToken } from "@server/api/dashboard-auth";
 import { verifyToken } from "@server/auth/jwt";
 import { isDemoMode } from "@server/config/demo";
 import * as usersRepo from "@server/repositories/users";
@@ -221,6 +222,13 @@ export function createAuthGuard() {
     return false;
   }
 
+  function isDashboardServiceTokenRoute(method: string, path: string): boolean {
+    return (
+      method.toUpperCase() === "GET" &&
+      path.split("?")[0] === "/api/ingest/dashboard"
+    );
+  }
+
   function isProtectedDemoRoute(path: string): boolean {
     const normalizedPath = path.split("?")[0] || path;
 
@@ -288,6 +296,24 @@ export function createAuthGuard() {
             tenantId: DEFAULT_TENANT_ID,
             username: "test",
             isSystemAdmin: true,
+          },
+          () => next(),
+        );
+        return;
+      }
+
+      const dashboardToken = process.env.JOBOPS_DASHBOARD_TOKEN?.trim();
+      if (
+        dashboardToken &&
+        isDashboardServiceTokenRoute(req.method, req.path) &&
+        hasValidBearerToken(req, dashboardToken)
+      ) {
+        runWithRequestContext(
+          {
+            tenantId:
+              process.env.JOBOPS_DASHBOARD_TENANT_ID?.trim() ||
+              DEFAULT_TENANT_ID,
+            username: "dashboard",
           },
           () => next(),
         );

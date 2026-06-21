@@ -33,6 +33,7 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { PipelineHealthPage } from "./pages/PipelineHealthPage";
 import { PivotFinderPage } from "./pages/PivotFinderPage";
+import { RecruitmentIntakePage } from "./pages/RecruitmentIntakePage";
 import SavedSearchesPage from "./pages/SavedSearchesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
@@ -210,6 +211,10 @@ export const App: React.FC = () => {
                 <Route
                   path="/pipeline-health"
                   element={<PipelineHealthPage />}
+                />
+                <Route
+                  path="/recruitment-intake"
+                  element={<RecruitmentIntakePage />}
                 />
                 <Route
                   path="/employer-insights"
