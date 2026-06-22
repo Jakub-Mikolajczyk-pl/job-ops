@@ -19,10 +19,14 @@ interface TokenizedInputProps {
   collapsedTextLimit?: number;
   disabled?: boolean;
   inputClassName?: string;
+  /** Lowercased keyword values to highlight as AI-added (green). */
+  addedValues?: Set<string>;
 }
 
 const TOKEN_PILL_CLASS_NAME =
   "inline-flex items-center rounded-full border px-2 py-1 text-xs text-muted-foreground";
+const ADDED_PILL_CLASS_NAME =
+  "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
 
 function mergeUnique(values: string[], nextValues: string[]): string[] {
   const seen = new Set(values.map((value) => value.toLowerCase()));
@@ -49,6 +53,7 @@ export const TokenizedInput: React.FC<TokenizedInputProps> = ({
   collapsedTextLimit = 5,
   disabled = false,
   inputClassName,
+  addedValues,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const tokensRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +100,9 @@ export const TokenizedInput: React.FC<TokenizedInputProps> = ({
   useLayoutEffect(() => {
     updateHeights();
   });
+
+  const isAdded = (value: string) =>
+    Boolean(addedValues?.has(value.toLowerCase()));
 
   return (
     <div className="space-y-3">
@@ -165,7 +173,11 @@ export const TokenizedInput: React.FC<TokenizedInputProps> = ({
                   <Button
                     type="button"
                     variant="outline"
-                    className={`h-auto ${TOKEN_PILL_CLASS_NAME}`}
+                    className={cn(
+                      "h-auto",
+                      TOKEN_PILL_CLASS_NAME,
+                      isAdded(value) && ADDED_PILL_CLASS_NAME,
+                    )}
                     aria-label={`${removeLabelPrefix} ${value}`}
                     disabled={disabled}
                     onPointerDown={(event) => event.preventDefault()}
@@ -195,7 +207,13 @@ export const TokenizedInput: React.FC<TokenizedInputProps> = ({
             style={{ pointerEvents: "none" }}
           >
             {collapsedPreview.visibleValues.map((value) => (
-              <span key={value} className={TOKEN_PILL_CLASS_NAME}>
+              <span
+                key={value}
+                className={cn(
+                  TOKEN_PILL_CLASS_NAME,
+                  isAdded(value) && ADDED_PILL_CLASS_NAME,
+                )}
+              >
                 {value}
               </span>
             ))}

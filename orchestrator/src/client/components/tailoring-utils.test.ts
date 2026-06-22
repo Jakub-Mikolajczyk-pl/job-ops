@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeSkillChanges,
   getOriginalHeadline,
   getOriginalSkills,
   getOriginalSummary,
@@ -89,5 +90,40 @@ describe("parseTailoredSkills", () => {
     expect(getOriginalSummary(null)).toBe("");
     expect(getOriginalHeadline(null)).toBe("");
     expect(getOriginalSkills(null)).toEqual([]);
+  });
+});
+
+describe("computeSkillChanges", () => {
+  it("flags added and removed keywords per category, case-insensitive", () => {
+    const changes = computeSkillChanges(
+      [{ name: "Backend", keywords: ["Node.js", "TypeScript", "Express"] }],
+      [
+        {
+          id: "g1",
+          name: "Backend",
+          keywordsText: "node.js, TypeScript, Kubernetes",
+        },
+      ],
+    );
+    const change = changes.get("g1");
+    expect(change?.added).toEqual(new Set(["kubernetes"]));
+    expect(change?.removed).toEqual(["Express"]);
+  });
+
+  it("treats a brand-new category as entirely added", () => {
+    const changes = computeSkillChanges(
+      [],
+      [{ id: "g1", name: "Cloud", keywordsText: "AWS, GCP" }],
+    );
+    expect(changes.get("g1")?.added).toEqual(new Set(["aws", "gcp"]));
+    expect(changes.get("g1")?.removed).toEqual([]);
+  });
+
+  it("omits groups with no changes", () => {
+    const changes = computeSkillChanges(
+      [{ name: "Backend", keywords: ["Node.js"] }],
+      [{ id: "g1", name: "Backend", keywordsText: "Node.js" }],
+    );
+    expect(changes.size).toBe(0);
   });
 });

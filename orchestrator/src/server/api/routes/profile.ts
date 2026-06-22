@@ -2,6 +2,10 @@ import { toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { isDemoMode } from "@server/config/demo";
 import { DEMO_PROJECT_CATALOG } from "@server/config/demo-defaults";
+import {
+  bragProjectToCatalogItem,
+  getBragDocumentProjects,
+} from "@server/services/brag-document";
 import { getDesignResumeStatus } from "@server/services/design-resume";
 import { clearProfileCache, getProfile } from "@server/services/profile";
 import { extractProjectsFromProfile } from "@server/services/resumeProjects";
@@ -26,7 +30,10 @@ profileRouter.get("/projects", async (_req: Request, res: Response) => {
     }
     const profile = await getProfile();
     const { catalog } = extractProjectsFromProfile(profile);
-    ok(res, catalog);
+    const bragProjects = (await getBragDocumentProjects()).map(
+      bragProjectToCatalogItem,
+    );
+    ok(res, [...catalog, ...bragProjects]);
   } catch (error) {
     fail(res, toAppError(error));
   }

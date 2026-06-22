@@ -134,3 +134,66 @@ export function getOriginalSkills(
 
   return groups;
 }
+
+export interface SkillGroupChange {
+  /** Lowercased keywords the AI added vs the base resume (for highlighting). */
+  added: Set<string>;
+  /** Original-case keywords present in the base but dropped from the draft. */
+  removed: string[];
+}
+
+/**
+ * Diff the current tailored skill groups against the base resume skills, matched
+ * by category name (case-insensitive). Returns a per-draft-group change keyed by
+ * the draft group's id; groups with no changes are omitted.
+ */
+export function computeSkillChanges(
+  baseGroups: TailoredSkillGroup[],
+  draftGroups: EditableSkillGroup[],
+): Map<string, SkillGroupChange> {
+  const baseByCategory = new Map<string, string[]>();
+  for (const group of baseGroups) {
+    const key = group.name.trim().toLowerCase();
+    const existing = baseByCategory.get(key) ?? [];
+    existing.push(...group.keywords);
+    baseByCategory.set(key, existing);
+  }
+
+  const changes = new Map<string, SkillGroupChange>();
+  for (const draft of draftGroups) {
+    const draftKeywords = draft.keywordsText
+      .split(/[\n,]/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const draftLower = new Set(
+      draftKeywords.map((value) => value.toLowerCase()),
+    );
+
+    const baseKeywords =
+      baseByCategory.get(draft.name.trim().toLowerCase()) ?? [];
+    const baseLower = new Set(baseKeywords.map((value) => value.toLowerCase()));
+
+    const added = new Set<string>();
+    for (const keyword of draftKeywords) {
+      if (!baseLower.has(keyword.toLowerCase())) {
+        added.add(keyword.toLowerCase());
+      }
+    }
+
+    const removed: string[] = [];
+    const seenRemoved = new Set<string>();
+    for (const keyword of baseKeywords) {
+      const lower = keyword.toLowerCase();
+      if (!draftLower.has(lower) && !seenRemoved.has(lower)) {
+        seenRemoved.add(lower);
+        removed.push(keyword);
+      }
+    }
+
+    if (added.size > 0 || removed.length > 0) {
+      changes.set(draft.id, { added, removed });
+    }
+  }
+
+  return changes;
+}

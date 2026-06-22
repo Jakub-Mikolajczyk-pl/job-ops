@@ -13,6 +13,7 @@ import { sanitizeUnknown } from "@infra/sanitize";
 import * as bragDocRepo from "@server/repositories/brag-document";
 import * as settingsRepo from "@server/repositories/settings";
 import { createScheduler } from "@server/utils/scheduler";
+import type { ResumeProjectCatalogItem } from "@shared/types";
 import { getOriginalEnvValue, normalizeEnvInput } from "./envSettings";
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -164,6 +165,155 @@ export async function getBragDocumentPromptSection(): Promise<string> {
     });
     return "";
   }
+}
+
+const MAX_BULLETS_PER_PROJECT = 6;
+const SKIP_PROJECT_HEADINGS = new Set(["usage notes"]);
+
+export interface BragDocumentProject {
+  /** Stable selection id, e.g. "brag:homelab-platform". */
+  id: string;
+  /** Section heading, used as the project name. */
+  name: string;
+  /** Display period derived from bullet dates, e.g. "2025 – 2026". */
+  period: string;
+  /** Most recent bullet date (YYYY-MM-DD) for sorting; "" if undated. */
+  date: string;
+  /** Impact bullets (date prefix stripped), most-recent first. */
+  bullets: string[];
+}
+
+export interface BragV5ProjectItem {
+  id: string;
+  hidden: boolean;
+  name: string;
+  period: string;
+  website: string;
+  description: string;
+}
+
+function slugifyHeading(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function derivePeriod(datesDesc: string[]): string {
+  const years = datesDesc
+    .map((d) => d.slice(0, 4))
+    .filter((y) => /^\d{4}$/.test(y))
+    .sort();
+  if (years.length === 0) return "";
+  const min = years[0];
+  const max = years[years.length - 1];
+  return min === max ? min : `${min} – ${max}`;
+}
+
+/**
+ * Pure: parse brag-document markdown into one project per `##` section.
+ * Front matter and non-project headings (e.g. "Usage Notes") are skipped.
+ */
+export function parseBragDocumentProjects(
+  markdown: string | null | undefined,
+): BragDocumentProject[] {
+  if (!markdown || !markdown.trim()) return [];
+
+  const projects: BragDocumentProject[] = [];
+  let heading: string | null = null;
+  let bullets: Array<{ date: string; text: string }> = [];
+
+  const flush = () => {
+    const name = heading?.trim();
+    if (
+      name &&
+      bullets.length > 0 &&
+      !SKIP_PROJECT_HEADINGS.has(name.toLowerCase())
+    ) {
+      const sorted = [...bullets].sort((a, b) =>
+        (b.date || "").localeCompare(a.date || ""),
+      );
+      const dates = sorted.map((entry) => entry.date).filter(Boolean);
+      projects.push({
+        id: `brag:${slugifyHeading(name)}`,
+        name,
+        period: derivePeriod(dates),
+        date: dates[0] ?? "",
+        bullets: sorted.map((entry) => entry.text),
+      });
+    }
+    heading = null;
+    bullets = [];
+  };
+
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const headingMatch = /^##\s+(.+?)\s*$/.exec(rawLine);
+    if (headingMatch) {
+      flush();
+      heading = headingMatch[1];
+      continue;
+    }
+    if (heading === null) continue;
+    const bulletMatch = /^[-*]\s+(.+)$/.exec(rawLine);
+    if (!bulletMatch) continue;
+    const text = bulletMatch[1].trim();
+    if (!text) continue;
+    const dated = /^(\d{4}-\d{2}-\d{2})\s*-\s*(.+)$/.exec(text);
+    if (dated) {
+      bullets.push({ date: dated[1], text: dated[2].trim() });
+    } else {
+      bullets.push({ date: "", text });
+    }
+  }
+  flush();
+
+  return projects;
+}
+
+/** Cached brag-document parsed into selectable projects (bullets capped). */
+export async function getBragDocumentProjects(): Promise<
+  BragDocumentProject[]
+> {
+  try {
+    const row = await bragDocRepo.getBragDocument();
+    if (!row?.content) return [];
+    return parseBragDocumentProjects(row.content).map((project) => ({
+      ...project,
+      bullets: project.bullets.slice(0, MAX_BULLETS_PER_PROJECT),
+    }));
+  } catch (error) {
+    logger.warn("Failed to load brag document projects", {
+      error: sanitizeUnknown(error),
+    });
+    return [];
+  }
+}
+
+/** Map a brag project to the tailoring project-catalog shape. */
+export function bragProjectToCatalogItem(
+  project: BragDocumentProject,
+): ResumeProjectCatalogItem {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.bullets.join("\n"),
+    date: project.period,
+    isVisibleInBase: false,
+  };
+}
+
+/** Map a brag project to a Reactive Resume v5 project item for PDF injection. */
+export function bragProjectToV5ProjectItem(
+  project: BragDocumentProject,
+): BragV5ProjectItem {
+  return {
+    id: project.id,
+    hidden: false,
+    name: project.name,
+    period: project.period,
+    website: "",
+    description: project.bullets.join("\n"),
+  };
 }
 
 const scheduler = createScheduler("brag-document-sync", async () => {

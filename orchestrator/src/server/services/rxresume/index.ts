@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { getSetting } from "@server/repositories/settings";
+import {
+  bragProjectToV5ProjectItem,
+  getBragDocumentProjects,
+} from "@server/services/brag-document";
 import { getOriginalEnvValue } from "@server/services/envSettings";
 import { pickProjectIdsForJob } from "@server/services/projectSelection";
 import { resolveResumeProjectsSettings } from "@server/services/resumeProjects";
@@ -378,6 +382,50 @@ export function extractProjectsFromResume(resumeData: unknown): {
   return { mode: "v5", catalog };
 }
 
+function asMutableRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Inject any selected brag-document projects (ids prefixed `brag:`) into the
+ * resume's projects section so they render. They then flow through the same
+ * visibility logic as native projects. No-op when none are selected.
+ */
+async function injectSelectedBragProjects(
+  workingCopy: Record<string, unknown>,
+  selectedProjectIds: string | null | undefined,
+): Promise<void> {
+  const selectedBragIds = parseSelectedProjectIds(
+    selectedProjectIds ?? "",
+  ).filter((id) => id.startsWith("brag:"));
+  if (selectedBragIds.length === 0) return;
+
+  const projects = await getBragDocumentProjects();
+  const chosen = projects.filter((project) =>
+    selectedBragIds.includes(project.id),
+  );
+  if (chosen.length === 0) return;
+
+  const sections = asMutableRecord(workingCopy.sections);
+  const projectsSection = sections ? asMutableRecord(sections.projects) : null;
+  if (!projectsSection) return;
+  if (!Array.isArray(projectsSection.items)) {
+    projectsSection.items = [];
+  }
+  const items = projectsSection.items as unknown[];
+  const existingIds = new Set(
+    items
+      .map((item) => asMutableRecord(item)?.id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  for (const project of chosen) {
+    if (existingIds.has(project.id)) continue;
+    items.push(bragProjectToV5ProjectItem(project));
+  }
+}
+
 export async function prepareTailoredResumeForPdf(args: {
   resumeData: unknown;
   tailoredContent: {
@@ -405,6 +453,8 @@ export async function prepareTailoredResumeForPdf(args: {
     resumeData: workingCopy,
     tailoredContent: args.tailoredContent,
   });
+
+  await injectSelectedBragProjects(workingCopy, args.selectedProjectIds);
 
   const { catalog, selectionItems } = extractProjectsFromResumeV5(workingCopy);
 

@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  computeSkillChanges,
   fromEditableSkillGroups,
   getOriginalHeadline,
   getOriginalSkills,
@@ -186,6 +187,13 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     };
   }, [profile]);
   const canUseOriginalValues = Boolean(profile) && !profileError;
+  const skillChanges = useMemo(
+    () =>
+      canUseOriginalValues
+        ? computeSkillChanges(getOriginalSkills(profile), skillsDraft)
+        : undefined,
+    [canUseOriginalValues, profile, skillsDraft],
+  );
   const [aiBaseline, setAiBaseline] = useState<TailoringBaseline>(() =>
     toBaselineFromJob(props.job),
   );
@@ -482,6 +490,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       headline,
       jobDescription,
       skillsDraft,
+      skillChanges,
       selectedIds,
       tracerLinksEnabled,
       tracerEnableBlocked,
@@ -533,6 +542,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       headline,
       jobDescription,
       skillsDraft,
+      skillChanges,
       selectedIds,
       tracerLinksEnabled,
       tracerEnableBlocked,

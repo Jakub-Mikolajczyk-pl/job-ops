@@ -14,8 +14,12 @@ vi.mock("../repositories/settings", () => ({
 import * as bragDocRepo from "../repositories/brag-document";
 import { getSetting } from "../repositories/settings";
 import {
+  bragProjectToCatalogItem,
+  bragProjectToV5ProjectItem,
   buildBragDocumentSection,
   capBragDocumentForPrompt,
+  getBragDocumentProjects,
+  parseBragDocumentProjects,
   syncBragDocument,
 } from "./brag-document";
 
@@ -179,5 +183,105 @@ describe("syncBragDocument", () => {
     expect(bragDocRepo.saveSyncError).toHaveBeenCalledWith(
       expect.stringContaining("network down"),
     );
+  });
+});
+
+describe("parseBragDocumentProjects", () => {
+  const sample = [
+    "# STATE: Brag Document",
+    "last_updated: 2026-06-18",
+    "",
+    "## Usage Notes",
+    "- Not a project section.",
+    "",
+    "## Homelab / Platform",
+    "- 2026-06-14 - Built a LAN dashboard.",
+    "- 2025-05-01 - Set up DNS failover.",
+    "",
+    "## Empty Section",
+    "",
+    "## Second Brain / AI Pipeline",
+    "- 2026-06-10 - Simplified the architecture.",
+  ].join("\n");
+
+  it("returns one project per section, skipping Usage Notes and empty sections", () => {
+    const projects = parseBragDocumentProjects(sample);
+    expect(projects.map((p) => p.name)).toEqual([
+      "Homelab / Platform",
+      "Second Brain / AI Pipeline",
+    ]);
+  });
+
+  it("slugifies ids and strips date prefixes, most-recent first", () => {
+    const [homelab] = parseBragDocumentProjects(sample);
+    expect(homelab.id).toBe("brag:homelab-platform");
+    expect(homelab.date).toBe("2026-06-14");
+    expect(homelab.bullets).toEqual([
+      "Built a LAN dashboard.",
+      "Set up DNS failover.",
+    ]);
+  });
+
+  it("derives a period (single year or range) from bullet dates", () => {
+    const [homelab, secondBrain] = parseBragDocumentProjects(sample);
+    expect(homelab.period).toBe("2025 – 2026");
+    expect(secondBrain.period).toBe("2026");
+  });
+
+  it("returns empty for blank or missing input", () => {
+    expect(parseBragDocumentProjects("")).toEqual([]);
+    expect(parseBragDocumentProjects(null)).toEqual([]);
+  });
+});
+
+describe("getBragDocumentProjects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reads cached content and caps bullets per project", async () => {
+    const manyBullets = Array.from(
+      { length: 10 },
+      (_, i) => `- 2026-01-${String(i + 1).padStart(2, "0")} - Item ${i + 1}`,
+    ).join("\n");
+    vi.mocked(bragDocRepo.getBragDocument).mockResolvedValue(
+      row({ content: `## Homelab\n${manyBullets}` }),
+    );
+
+    const projects = await getBragDocumentProjects();
+
+    expect(projects).toHaveLength(1);
+    expect(projects[0].bullets).toHaveLength(6);
+  });
+});
+
+describe("brag project mappers", () => {
+  const project = {
+    id: "brag:homelab",
+    name: "Homelab",
+    period: "2025 – 2026",
+    date: "2026-01-01",
+    bullets: ["Did X.", "Did Y."],
+  };
+
+  it("maps to a catalog item that is not visible in the base resume", () => {
+    expect(bragProjectToCatalogItem(project)).toEqual({
+      id: "brag:homelab",
+      name: "Homelab",
+      description: "Did X.\nDid Y.",
+      date: "2025 – 2026",
+      isVisibleInBase: false,
+    });
+  });
+
+  it("maps to a v5 project item ready for resume injection", () => {
+    expect(bragProjectToV5ProjectItem(project)).toEqual({
+      id: "brag:homelab",
+      hidden: false,
+      name: "Homelab",
+      period: "2025 – 2026",
+      website: "",
+      description: "Did X.\nDid Y.",
+    });
   });
 });

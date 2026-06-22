@@ -61,7 +61,14 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
                   className="mt-0.5"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{project.name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{project.name}</span>
+                    {project.id.startsWith("brag:") ? (
+                      <span className="shrink-0 rounded-full border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-medium text-sky-300">
+                        brag doc
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
                     {description}
                   </div>

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ProjectSelector } from "../discovered-panel/ProjectSelector";
-import type { EditableSkillGroup } from "../tailoring-utils";
+import type { EditableSkillGroup, SkillGroupChange } from "../tailoring-utils";
 
 interface TailoringSectionsProps {
   catalog: ResumeProjectCatalogItem[];
@@ -37,6 +37,7 @@ interface TailoringSectionsProps {
   headline: string;
   jobDescription: string;
   skillsDraft: EditableSkillGroup[];
+  skillChanges?: Map<string, SkillGroupChange>;
   selectedIds: Set<string>;
   tracerLinksEnabled: boolean;
   tracerEnableBlocked: boolean;
@@ -146,6 +147,13 @@ const skillGroupHasKeywords = (keywordsText: string) =>
 const skillGroupNeedsReview = (group: EditableSkillGroup) =>
   !textHasValue(group.name) || !skillGroupHasKeywords(group.keywordsText);
 
+const changeBadgeLabel = (change: SkillGroupChange): string => {
+  const parts: string[] = [];
+  if (change.added.size > 0) parts.push(`${change.added.size} added`);
+  if (change.removed.length > 0) parts.push(`${change.removed.length} removed`);
+  return parts.join(" · ");
+};
+
 const SectionTriggerLabel: React.FC<{
   title: string;
   state: SectionState;
@@ -189,6 +197,7 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
   headline,
   jobDescription,
   skillsDraft,
+  skillChanges,
   selectedIds,
   tracerLinksEnabled,
   tracerEnableBlocked,
@@ -497,92 +506,113 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
                 onValueChange={onSkillGroupOpenChange}
                 className="space-y-2"
               >
-                {skillsDraft.map((group, index) => (
-                  <AccordionItem
-                    key={group.id}
-                    value={group.id}
-                    className="rounded-md border border-border/55 bg-background/45 px-0"
-                  >
-                    <AccordionTrigger className="px-3 py-2 text-[11px] font-medium hover:bg-muted/20 hover:no-underline">
-                      {group.name.trim() || `Skill Group ${index + 1}`}
-                    </AccordionTrigger>
-                    <AccordionContent className="px-3 pb-3 pt-2">
-                      <div className="space-y-2">
-                        <div className="space-y-1">
-                          <label
-                            htmlFor={`tailor-skill-group-name-${group.id}`}
-                            className="text-[11px] font-medium text-muted-foreground"
-                          >
-                            Category
-                          </label>
-                          <input
-                            id={`tailor-skill-group-name-${group.id}`}
-                            type="text"
-                            className={inputClass}
-                            value={group.name}
-                            onChange={(event) =>
-                              onUpdateSkillGroup(
-                                group.id,
-                                "name",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Backend, Frontend, Infrastructure..."
-                            disabled={disableInputs}
-                          />
-                        </div>
+                {skillsDraft.map((group, index) => {
+                  const change = skillChanges?.get(group.id);
+                  return (
+                    <AccordionItem
+                      key={group.id}
+                      value={group.id}
+                      className="rounded-md border border-border/55 bg-background/45 px-0"
+                    >
+                      <AccordionTrigger className="px-3 py-2 text-[11px] font-medium hover:bg-muted/20 hover:no-underline">
+                        <span className="flex w-full items-center justify-between gap-2 pr-2">
+                          <span className="truncate">
+                            {group.name.trim() || `Skill Group ${index + 1}`}
+                          </span>
+                          {change ? (
+                            <span className="shrink-0 font-normal text-[10px] text-emerald-300/80">
+                              {changeBadgeLabel(change)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-3 pb-3 pt-2">
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <label
+                              htmlFor={`tailor-skill-group-name-${group.id}`}
+                              className="text-[11px] font-medium text-muted-foreground"
+                            >
+                              Category
+                            </label>
+                            <input
+                              id={`tailor-skill-group-name-${group.id}`}
+                              type="text"
+                              className={inputClass}
+                              value={group.name}
+                              onChange={(event) =>
+                                onUpdateSkillGroup(
+                                  group.id,
+                                  "name",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Backend, Frontend, Infrastructure..."
+                              disabled={disableInputs}
+                            />
+                          </div>
 
-                        <div className="space-y-1">
-                          <label
-                            htmlFor={`tailor-skill-group-keywords-${group.id}`}
-                            className="text-[11px] font-medium text-muted-foreground"
-                          >
-                            Keywords (comma-separated)
-                          </label>
-                          <TokenizedInput
-                            id={`tailor-skill-group-keywords-${group.id}`}
-                            values={parseSkillGroupKeywordsInput(
-                              group.keywordsText,
-                            )}
-                            draft={keywordDrafts[group.id] ?? ""}
-                            parseInput={parseSkillGroupKeywordsInput}
-                            onDraftChange={(value) =>
-                              setKeywordDrafts((current) => ({
-                                ...current,
-                                [group.id]: value,
-                              }))
-                            }
-                            onValuesChange={(values) =>
-                              onUpdateSkillGroup(
-                                group.id,
-                                "keywordsText",
-                                values.join(", "),
-                              )
-                            }
-                            placeholder="TypeScript, Node.js, REST APIs..."
-                            helperText="Press Enter, comma, or paste a list to add keywords."
-                            removeLabelPrefix="Remove keyword"
-                            disabled={disableInputs}
-                          />
-                        </div>
+                          <div className="space-y-1">
+                            <label
+                              htmlFor={`tailor-skill-group-keywords-${group.id}`}
+                              className="text-[11px] font-medium text-muted-foreground"
+                            >
+                              Keywords (comma-separated)
+                            </label>
+                            <TokenizedInput
+                              id={`tailor-skill-group-keywords-${group.id}`}
+                              values={parseSkillGroupKeywordsInput(
+                                group.keywordsText,
+                              )}
+                              draft={keywordDrafts[group.id] ?? ""}
+                              parseInput={parseSkillGroupKeywordsInput}
+                              onDraftChange={(value) =>
+                                setKeywordDrafts((current) => ({
+                                  ...current,
+                                  [group.id]: value,
+                                }))
+                              }
+                              onValuesChange={(values) =>
+                                onUpdateSkillGroup(
+                                  group.id,
+                                  "keywordsText",
+                                  values.join(", "),
+                                )
+                              }
+                              placeholder="TypeScript, Node.js, REST APIs..."
+                              helperText="Press Enter, comma, or paste a list to add keywords."
+                              removeLabelPrefix="Remove keyword"
+                              disabled={disableInputs}
+                              addedValues={change?.added}
+                            />
+                            {change && change.removed.length > 0 ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Removed by AI:{" "}
+                                <span className="text-rose-300/80 line-through">
+                                  {change.removed.join(", ")}
+                                </span>
+                              </p>
+                            ) : null}
+                          </div>
 
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                            onClick={() => onRemoveSkillGroup(group.id)}
-                            disabled={disableInputs}
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            Remove
-                          </Button>
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                              onClick={() => onRemoveSkillGroup(group.id)}
+                              disabled={disableInputs}
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              Remove
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
               </Accordion>
             )}
           </AccordionContent>
