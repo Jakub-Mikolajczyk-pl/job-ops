@@ -79,6 +79,29 @@ describe("latex resume renderer", () => {
     expect(template).toContain("__BODY__");
   });
 
+  it("guards against stranded list markers via club/widow penalties", async () => {
+    const template = await readLatexTemplate();
+    expect(template).toContain("\\clubpenalty=10000");
+    expect(template).toContain("\\widowpenalty=10000");
+  });
+
+  it("drops empty bullets so no marker is emitted without text", () => {
+    const latex = buildLatexDocument(
+      {
+        ...baseDocument,
+        experience: [
+          {
+            ...baseDocument.experience[0],
+            bullets: ["Real bullet", "   ", ""],
+          },
+        ],
+      },
+      "__BODY__",
+    );
+    expect(latex).toContain("\\resumeItem{Real bullet}");
+    expect(latex).not.toContain("\\resumeItem{}");
+  });
+
   it("uses the TECTONIC_BIN override when present", () => {
     const previous = process.env.TECTONIC_BIN;
     process.env.TECTONIC_BIN = "/tmp/custom-tectonic";

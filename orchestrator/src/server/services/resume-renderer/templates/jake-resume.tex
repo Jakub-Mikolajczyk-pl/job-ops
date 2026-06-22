@@ -45,6 +45,11 @@
 \raggedright
 \setlength{\tabcolsep}{0in}
 
+% Keep a list-item bullet with its first line of text so a marker is never
+% stranded alone at the bottom of a page (its text pushed to the next page).
+\clubpenalty=10000
+\widowpenalty=10000
+
 \titleformat{\section}{
   \vspace{-4pt}\scshape\raggedright\large
 }{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]

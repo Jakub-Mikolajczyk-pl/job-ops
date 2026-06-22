@@ -252,10 +252,13 @@ function renderHeaderItems(
 }
 
 function renderBullets(items: string[]): string {
-  if (items.length === 0) return "";
+  const nonEmpty = items.filter((item) => normalizeText(item).length > 0);
+  if (nonEmpty.length === 0) return "";
   return [
     "      \\resumeItemListStart",
-    ...items.map((item) => `        \\resumeItem{${escapeForCommand(item)}}`),
+    ...nonEmpty.map(
+      (item) => `        \\resumeItem{${escapeForCommand(item)}}`,
+    ),
     "      \\resumeItemListEnd",
   ].join("\n");
 }
