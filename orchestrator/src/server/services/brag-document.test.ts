@@ -22,6 +22,7 @@ import {
   parseBragDocumentProjects,
   syncBragDocument,
 } from "./brag-document";
+import { projectItemSchema } from "./rxresume/schema/v5";
 
 function row(
   over: Partial<{ sourceUrl: string | null; content: string | null }>,
@@ -274,14 +275,17 @@ describe("brag project mappers", () => {
     });
   });
 
-  it("maps to a v5 project item ready for resume injection", () => {
-    expect(bragProjectToV5ProjectItem(project)).toEqual({
+  it("maps to a v5 project item that satisfies the resume schema", () => {
+    const item = bragProjectToV5ProjectItem(project);
+    expect(item).toEqual({
       id: "brag:homelab",
       hidden: false,
       name: "Homelab",
       period: "2025 – 2026",
-      website: "",
+      website: { url: "", label: "" },
       description: "Did X.\nDid Y.",
     });
+    // Guard the injection contract against the real Reactive Resume v5 schema.
+    expect(projectItemSchema.safeParse(item).success).toBe(true);
   });
 });

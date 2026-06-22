@@ -188,7 +188,7 @@ export interface BragV5ProjectItem {
   hidden: boolean;
   name: string;
   period: string;
-  website: string;
+  website: { url: string; label: string };
   description: string;
 }
 
@@ -311,7 +311,7 @@ export function bragProjectToV5ProjectItem(
     hidden: false,
     name: project.name,
     period: project.period,
-    website: "",
+    website: { url: "", label: "" },
     description: project.bullets.join("\n"),
   };
 }
